@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0b1530">
+<title>最近的天空大事 — 南十字天文台</title>
+<meta name="description" content="從屏東車城看出去的流星雨、月相、日月食與行星天象，依今天日期自動計算。">
+<style>
+:root{--bg:#0b1530;--card:#13214a;--card2:#1a2b5c;--line:#2a3d74;--tx:#eef2ff;--tx2:#a9b4d6;--gold:#ffd166;--blue:#7cc4ff;--good:#7be0a6;--mid:#ffd166;--bad:#ff8a8a}
+*{box-sizing:border-box}
+html{background:var(--bg)}
+body{margin:0;background:radial-gradient(1200px 600px at 70% -10%,#1b2f6b 0,var(--bg) 60%) fixed;color:var(--tx);font-family:"Noto Sans TC","Microsoft JhengHei","PingFang TC",sans-serif;line-height:1.6}
+a{color:var(--blue)}
+.top{max-width:1080px;margin:0 auto;padding:14px 20px 0;font-size:14px}
+header{max-width:1080px;margin:0 auto;padding:18px 20px 8px}
+.kicker{color:var(--gold);font-weight:700;letter-spacing:.08em;font-size:14px}
+h1{font-size:clamp(26px,5vw,40px);margin:4px 0 6px}
+.lead{color:var(--tx2);margin:0;max-width:720px}
+main{max-width:1080px;margin:0 auto;padding:4px 20px 40px}
+h2{font-size:21px;margin:30px 0 12px;color:var(--gold)}
+.sub{color:var(--tx2);font-size:14px;margin:-6px 0 12px}
+.panel{background:linear-gradient(180deg,var(--card2),var(--card));border:1px solid var(--line);border-radius:16px;padding:18px}
+/* 今晚 */
+.tonight{display:grid;grid-template-columns:150px 1fr;gap:20px;align-items:center}
+.tonight .big{font-size:22px;font-weight:700}
+.kv{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px 16px;margin-top:8px}
+.kv div{font-size:15px}.kv b{color:var(--tx2);font-weight:500;font-size:13px;display:block}
+.planets{margin-top:12px;display:flex;flex-wrap:wrap;gap:8px}
+.pl{padding:4px 10px;border-radius:999px;background:rgba(124,196,255,.12);color:var(--blue);font-size:13px}
+.pl.off{background:rgba(255,255,255,.05);color:#6f7ba3}
+/* 流星雨 */
+.meteors{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px}
+.mcard{background:linear-gradient(180deg,var(--card2),var(--card));border:1px solid var(--line);border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:6px}
+.mcard.next{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold) inset}
+.mhead{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.mcard h3{margin:0;font-size:19px}
+.when{color:var(--gold);font-weight:700;font-size:15px}
+.stars{font-size:18px;letter-spacing:2px}
+.rate{font-size:14px;color:var(--tx2)}
+.mrow{display:flex;gap:14px;align-items:center;font-size:14px;color:var(--tx2)}
+.mrow svg{flex:none}
+.tip{font-size:14px}
+.badge{display:inline-block;font-size:12px;padding:1px 8px;border-radius:6px;margin-left:6px;vertical-align:2px}
+.b-good{background:rgba(123,224,166,.15);color:var(--good)}.b-mid{background:rgba(255,209,102,.15);color:var(--mid)}.b-bad{background:rgba(255,138,138,.15);color:var(--bad)}
+.b-next{background:var(--gold);color:#1a1300}
+/* 月曆 */
+.calnav{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+.calnav button{background:var(--card2);color:var(--tx);border:1px solid var(--line);border-radius:10px;padding:6px 14px;font-size:15px;cursor:pointer}
+.calnav button:hover{border-color:var(--gold)}
+.calnav .ttl{font-size:19px;font-weight:700;min-width:140px;text-align:center}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.cal .dow{text-align:center;color:var(--tx2);font-size:13px;padding:4px 0}
+.day{background:rgba(255,255,255,.03);border:1px solid transparent;border-radius:10px;padding:6px 4px 4px;text-align:center;min-height:86px;display:flex;flex-direction:column;align-items:center;gap:2px}
+.day.empty{background:none}
+.day.today{border-color:var(--gold)}
+.day .d{font-size:14px;font-weight:700;align-self:flex-start;padding-left:4px}
+.day .lu{font-size:11px;color:var(--tx2)}
+.day .ph{font-size:11px;color:var(--gold);font-weight:700}
+.day.met{background:rgba(124,196,255,.10)}
+.day .mt{font-size:10px;color:var(--blue)}
+.phases{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;margin-top:12px}
+.phases div{font-size:14px;background:rgba(255,255,255,.03);border-radius:10px;padding:8px 10px}
+/* 其他天象 */
+.evlist{display:flex;flex-direction:column;gap:8px}
+.ev{display:grid;grid-template-columns:120px 1fr;gap:14px;padding:12px 14px;background:linear-gradient(180deg,var(--card2),var(--card));border:1px solid var(--line);border-radius:12px}
+.ev .dt{color:var(--gold);font-weight:700}
+.ev .tt{font-weight:700}
+.ev .ds{color:var(--tx2);font-size:14px}
+.hint{color:var(--tx2);font-size:13px;margin-top:10px}
+footer{max-width:1080px;margin:0 auto;padding:24px 20px 48px;color:var(--tx2);font-size:13px;border-top:1px solid var(--line)}
+@media (max-width:640px){
+ .tonight{grid-template-columns:1fr;justify-items:center;text-align:center}
+ .day{min-height:66px;padding:4px 1px}.day .lu,.day .mt{display:none}
+ .ev{grid-template-columns:1fr;gap:2px}
+}
+@media print{
+ body{background:#fff;color:#000}.panel,.mcard,.ev{background:#fff;border-color:#999}
+ .calnav button,.top{display:none}
+}
+</style>
+</head>
+<body>
+<div class="top"><a href="../">← 回天文互動教室</a></div>
+<header>
+  <div class="kicker">車城國小 南十字天文台 · IAU P38</div>
+  <h1>最近的天空大事</h1>
+  <p class="lead">從車城（北緯 22.07°、東經 120.71°）看出去的流星雨、月相、日月食和行星。每次打開都會依今天的日期重新計算，時間都是台灣時間。</p>
+</header>
+<main>
+  <h2>🌙 今晚的天空</h2>
+  <div class="panel tonight" id="tonight"></div>
+
+  <h2>☄️ 接下來一年的流星雨</h2>
+  <p class="sub">星等是依車城的位置、輻射點高度和當晚月光算出來的觀測條件，金框是最近一場。</p>
+  <div class="meteors" id="meteors"></div>
+  <p class="hint">「每小時最多」是在完全黑暗、輻射點在頭頂時的理想數字（ZHR）。在車城實際看到的通常只有它的三分之一到一半，有路燈的地方更少。峰值時間有半天左右的誤差，前後一晚也值得看。</p>
+
+  <h2>🌗 月相月曆</h2>
+  <div class="panel">
+    <div class="calnav"><button id="prev" aria-label="上個月">◀</button><div class="ttl" id="calttl"></div><button id="next" aria-label="下個月">▶</button><button id="thism">回到這個月</button></div>
+    <div class="cal" id="cal"></div>
+    <div class="phases" id="phaselist"></div>
+    <p class="hint">日期下的小字是農曆日（初一＝新月那天）。藍底的日子是流星雨極大期。</p>
+  </div>
+
+  <h2>🔭 其他天象（接下來一年）</h2>
+  <div class="evlist" id="events"></div>
+  <p class="hint">日月食只列在車城看得到的。行星「衝」的前後一個月，整晚都看得到那顆行星，是觀察的好時機。</p>
+</main>
+<footer>
+  天象由 <a href="https://github.com/cosinekitty/astronomy">Astronomy Engine</a>（Don Cross，MIT 授權）即時計算；流星雨極大期依國際流星組織（IMO）公布的太陽黃經推算。© 車城國小 南十字天文台
+</footer>
+<script src="../assets/astronomy.js"></script>
+<script>
+(function(){
+const A=Astronomy;
+const OB=new A.Observer(22.07,120.71,10);
+const TZ=8*3600e3;
+const now=new Date();
+const DOW='日一二三四五六';
+// 以台灣時間取年月日
+function tw(d){const x=new Date(d.getTime()+TZ);return {y:x.getUTCFullYear(),m:x.getUTCMonth()+1,d:x.getUTCDate(),h:x.getUTCHours(),mi:x.getUTCMinutes(),w:x.getUTCDay()};}
+function twDate(y,m,d,h=0,mi=0){return new Date(Date.UTC(y,m-1,d,h,mi)-TZ);}
+function pad(n){return String(n).padStart(2,'0');}
+function fDate(d){const t=tw(d);return `${t.m}/${t.d}（${DOW[t.w]}）`;}
+function fTime(d){const t=tw(d);return `${pad(t.h)}:${pad(t.mi)}`;}
+function fFull(d){const t=tw(d);return `${t.y}/${t.m}/${t.d}（${DOW[t.w]}）${pad(t.h)}:${pad(t.mi)}`;}
+function dayKey(d){const t=tw(d);return `${t.y}-${t.m}-${t.d}`;}
+function moonFrac(d){return A.Illumination('Moon',d).phase_fraction;}
+function moonPhaseDeg(d){return A.MoonPhase(d);}
+function alt(body,d){const eq=A.Equator(body,d,OB,true,true);return A.Horizon(d,OB,eq.ra,eq.dec,'normal').altitude;}
+function altRaDec(raH,dec,d){return A.Horizon(d,OB,raH,dec,'normal').altitude;}
+function riseSet(body,start,dir){try{const r=A.SearchRiseSet(body,OB,dir,start,1.2);return r?r.date:null;}catch(e){return null;}}
+
+// 月亮小圖
+function moonSVG(phaseDeg,size){
+  const r=size/2-1, c=size/2;
+  const f=(1-Math.cos(phaseDeg*Math.PI/180))/2; // 亮面比例
+  const waxing=phaseDeg<180;
+  const k=Math.cos(phaseDeg*Math.PI/180); // 終界線橢圓 x 半徑比例
+  const rx=Math.abs(k)*r;
+  // 亮邊：漸盈在右、漸虧在左（北半球）
+  const side=waxing?1:-1;
+  let d=`M ${c} ${c-r} A ${r} ${r} 0 0 ${side>0?1:0} ${c} ${c+r} `;
+  const sweep=(waxing? (k>0?0:1) : (k>0?1:0));
+  d+=`A ${rx} ${r} 0 0 ${sweep} ${c} ${c-r} Z`;
+  return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" aria-hidden="true"><circle cx="${c}" cy="${c}" r="${r}" fill="#26314f"/>${f>0.01?`<path d="${d}" fill="#f4ecd0"/>`:''}<circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="#56628a" stroke-width="1"/></svg>`;
+}
+function phaseName(deg){
+  if(deg<6||deg>=354)return '新月';
+  if(deg<84)return '眉月（漸盈）';
+  if(deg<96)return '上弦月';
+  if(deg<174)return '盈凸月';
+  if(deg<186)return '滿月';
+  if(deg<264)return '虧凸月';
+  if(deg<276)return '下弦月';
+  return '殘月（漸虧）';
+}
+// 新月清單（農曆日用）
+const newMoons=[];
+{let t=A.SearchMoonPhase(0,new Date(now.getTime()-400*864e5),40);for(let i=0;i<30&&t;i++){newMoons.push(t.date);t=A.SearchMoonPhase(0,new Date(t.date.getTime()+20*864e5),40);}}
+const LU=['初一','初二','初三','初四','初五','初六','初七','初八','初九','初十','十一','十二','十三','十四','十五','十六','十七','十八','十九','二十','廿一','廿二','廿三','廿四','廿五','廿六','廿七','廿八','廿九','三十'];
+function lunarDay(y,m,d){
+  const noon=twDate(y,m,d,12);
+  let nm=null;for(const t of newMoons){if(t<=twDate(y,m,d,23,59))nm=t;else break;}
+  if(!nm)return '';
+  const a=tw(nm);const n0=Date.UTC(a.y,a.m-1,a.d), n1=Date.UTC(y,m-1,d);
+  return LU[Math.round((n1-n0)/864e5)]||'';
+}
+
+// ===== 今晚 =====
+(function(){
+  const ph=moonPhaseDeg(now), fr=moonFrac(now);
+  const t=tw(now);
+  const dayStart=twDate(t.y,t.m,t.d,0,0);
+  const sunset=riseSet('Sun',dayStart,-1), sunrise=riseSet('Sun',sunset||now,+1);
+  const mrise=riseSet('Moon',dayStart,+1), mset=riseSet('Moon',dayStart,-1);
+  const dusk=sunset?new Date(sunset.getTime()+75*60e3):now;
+  const PL=[['Mercury','水星'],['Venus','金星'],['Mars','火星'],['Jupiter','木星'],['Saturn','土星']];
+  const vis=PL.map(([b,zh])=>{
+    // 日落後到日出前，每 30 分鐘看高度
+    let first=null,last=null;const end=sunrise?new Date(sunrise.getTime()-40*60e3):new Date(dusk.getTime()+10*3600e3);
+    const st=sunset?new Date(sunset.getTime()+30*60e3):dusk;
+    for(let x=st.getTime();x<=end.getTime();x+=10*60e3){if(alt(b,new Date(x))>10){if(!first)first=new Date(x);last=new Date(x);}}
+    return {zh,ok:!!first,txt:first?`${zh} ${fTime(first)}–${fTime(last)}`:`${zh}（今晚看不到）`};
+  });
+  document.getElementById('tonight').innerHTML=`
+   <div>${moonSVG(ph,130)}</div>
+   <div>
+     <div class="big">${t.m} 月 ${t.d} 日 · ${phaseName(ph)}</div>
+     <div style="color:var(--tx2)">農曆${lunarDay(t.y,t.m,t.d)} · 月亮亮面 ${Math.round(fr*100)}%</div>
+     <div class="kv">
+       <div><b>日落</b>${sunset?fTime(sunset):'—'}</div>
+       <div><b>月出</b>${mrise?fDate(mrise)+' '+fTime(mrise):'—'}</div>
+       <div><b>月落</b>${mset?fDate(mset)+' '+fTime(mset):'—'}</div>
+       <div><b>明天日出</b>${sunrise?fTime(sunrise):'—'}</div>
+     </div>
+     <div style="font-size:13px;color:var(--tx2);margin-top:10px">今晚看得到的行星（高度 10° 以上的時段）</div><div class="planets" style="margin-top:4px">${vis.map(v=>`<span class="pl${v.ok?'':' off'}">${v.txt}</span>`).join('')}</div>
+   </div>`;
+})();
+
+// ===== 流星雨 =====
+// lam: IMO 太陽黃經（J2000），ra 度, dec 度, zhr
+const SHOWERS=[
+ {zh:'象限儀座流星雨',en:'Quadrantids',lam:283.15,ra:230,dec:49,zhr:80,src:'2003 EH1（小行星）',note:'峰值很尖，只有幾個小時，要抓準時間。'},
+ {zh:'天琴座流星雨',en:'Lyrids',lam:32.32,ra:271,dec:34,zhr:18,src:'柴契爾彗星',note:'偶爾有明亮火流星。'},
+ {zh:'寶瓶座η流星雨',en:'η Aquariids',lam:45.5,ra:338,dec:-1,zhr:50,src:'哈雷彗星',note:'對台灣比對北方國家好看，只能在天亮前看。'},
+ {zh:'南寶瓶座δ流星雨',en:'S. δ Aquariids',lam:127,ra:340,dec:-16,zhr:25,src:'96P 彗星',note:'輻射點偏南，車城的緯度看起來比北台灣好。'},
+ {zh:'英仙座流星雨',en:'Perseids',lam:140.0,ra:48,dec:58,zhr:100,src:'斯威夫特－塔特爾彗星',note:'暑假最好看的一場，後半夜最多。'},
+ {zh:'獵戶座流星雨',en:'Orionids',lam:208,ra:95,dec:16,zhr:20,src:'哈雷彗星',note:'速度快，常留下餘痕。'},
+ {zh:'北金牛座流星雨',en:'N. Taurids',lam:230,ra:58,dec:22,zhr:5,src:'恩克彗星',note:'數量少，但常有慢速的大火球。'},
+ {zh:'獅子座流星雨',en:'Leonids',lam:235.27,ra:152,dec:22,zhr:15,src:'坦普爾－塔特爾彗星',note:'速度最快的流星雨之一，輻射點半夜才升起。'},
+ {zh:'雙子座流星雨',en:'Geminids',lam:261.85,ra:112,dec:33,zhr:150,src:'法厄松（小行星）',note:'一年中最穩定、最多的一場，晚上九點後就開始有。'},
+ {zh:'小熊座流星雨',en:'Ursids',lam:270.65,ra:217,dec:75,zhr:10,src:'塔特爾彗星',note:'輻射點在北方低空，車城看起來比較吃虧。'}
+];
+const PREC=0.3597+1.397*((now.getUTCFullYear()-2026)/100); // J2000 → 當日黃經
+function showerEvents(){
+  const out=[];
+  for(const s of SHOWERS){
+    let t=A.SearchSunLongitude((s.lam+PREC)%360,new Date(now.getTime()-1.5*864e5),370);
+    if(!t)continue;
+    const peak=t.date;
+    // 「X–Y 夜」：峰值在台灣時間中午前 → 前一晚
+    const p=tw(peak);
+    const nightStart= p.h<12? twDate(p.y,p.m,p.d-1,12): twDate(p.y,p.m,p.d,12);
+    const a=tw(nightStart), b=tw(new Date(nightStart.getTime()+864e5));
+    let nightLbl=`${a.m}/${a.d}–${b.m}/${b.d} 夜`;
+    if(p.h>=8&&p.h<17){ // 峰值落在台灣白天：前後兩晚都列
+      const z=tw(new Date(nightStart.getTime()-864e5));
+      nightLbl=`${z.m}/${z.d}–${a.m}/${a.d} 夜、${a.m}/${a.d}–${b.m}/${b.d} 夜`;
+    }
+    const peakTxt=`極大期約 ${fFull(peak)}${p.h>=6&&p.h<18?'（白天）':''}`;
+    // 夜間逐 20 分鐘評估：天文暗（太陽 < -15°）、輻射點高度、月亮
+    const raH=s.ra/15;
+    let best={score:0},darkStart=null,darkEnd=null,radRise=null;
+    for(let x=nightStart.getTime()+4*3600e3;x<nightStart.getTime()+19*3600e3;x+=20*60e3){
+      const d=new Date(x);
+      const sa=alt('Sun',d); if(sa>-15)continue;
+      if(!darkStart)darkStart=d; darkEnd=d;
+      const ra=altRaDec(raH,s.dec,d);
+      if(ra>5&&!radRise)radRise=d;
+      const ma=alt('Moon',d), mf=moonFrac(d);
+      const moonPen= ma>0? (1-0.75*mf): 1;
+      const sc= ra>0? s.zhr*Math.sin(ra*Math.PI/180)*moonPen : 0;
+      if(sc>best.score)best={score:sc,t:d,ra,ma,mf};
+    }
+    const mf=moonFrac(peak), mph=moonPhaseDeg(peak);
+    // 月亮在暗夜時段裡出現的比例
+    let up=0,n=0;if(darkStart)for(let x=darkStart.getTime();x<=darkEnd.getTime();x+=30*60e3){n++;if(alt('Moon',new Date(x))>0)up++;}
+    const moonUp=n?up/n:0;
+    const ratio=best.score/s.zhr; // 0..1
+    let stars= ratio>0.6?5: ratio>0.42?4: ratio>0.27?3: ratio>0.13?2: 1;
+    if(s.zhr<12)stars=Math.min(stars,2);
+    let moonTxt;
+    if(mf<0.25)moonTxt='月光很少，不影響';
+    else if(moonUp<0.25)moonTxt=`月亮 ${Math.round(mf*100)}%，但大部分暗夜時段不在天上`;
+    else if(moonUp<0.7)moonTxt=`月亮 ${Math.round(mf*100)}%，${best.ma<=0?'等月亮下山後再看':'會有一段時間被月光干擾'}`;
+    else moonTxt=`月亮 ${Math.round(mf*100)}%，整晚月光干擾`;
+    const bestTxt=best.t?`最佳時段約 ${fTime(best.t)}`:'車城看不太到輻射點';
+    const radTxt=radRise?`輻射點 ${fTime(radRise)} 後升到夠高`:'';
+    out.push({...s,peak,peakTxt,nightLbl,stars,moonTxt,bestTxt,radTxt,mph,est:Math.round(best.score/2)});
+  }
+  out.sort((a,b)=>a.peak-b.peak);
+  return out;
+}
+const MET=showerEvents();
+const metDays={};
+MET.forEach((s,i)=>{
+  const p=tw(s.peak);const k=`${p.y}-${p.m}-${p.d}`;metDays[k]=s.zh;
+  s.isNext=(i===MET.findIndex(x=>x.peak>new Date(now.getTime()-864e5)));
+});
+document.getElementById('meteors').innerHTML=MET.map(s=>{
+  const lvl=s.stars>=4?'b-good':s.stars>=3?'b-mid':'b-bad';
+  const lvlT=s.stars>=4?'值得特地去看':s.stars>=3?'可以看看':'條件不佳';
+  return `<div class="mcard${s.isNext?' next':''}">
+    <div class="mhead"><h3>${s.zh}${s.isNext?'<span class="badge b-next">最近一場</span>':''}</h3><span class="stars" title="觀測條件">${'★'.repeat(s.stars)}<span style="opacity:.25">${'★'.repeat(5-s.stars)}</span></span></div>
+    <div class="when">${s.nightLbl}<span class="badge ${lvl}">${lvlT}</span></div>
+    <div class="rate">${s.peakTxt}</div>
+    <div class="rate">${s.en} · 每小時最多約 ${s.zhr} 顆 · 母天體：${s.src}</div>
+    <div class="mrow">${moonSVG(s.mph,28)}<span>${s.moonTxt}</span></div>
+    <div class="tip">⏰ ${s.bestTxt}${s.radTxt?'；'+s.radTxt:''}</div>
+    <div class="tip" style="color:var(--tx2)">${s.note}</div>
+  </div>`;}).join('');
+
+// ===== 月相月曆 =====
+let cy=tw(now).y, cm=tw(now).m;
+function mainPhases(y,m){
+  const res=[];const start=twDate(y,m,1), end=twDate(y,m+1,1);
+  const names=['新月','上弦','滿月','下弦'];
+  for(let q=0;q<4;q++){
+    let t=A.SearchMoonPhase(q*90,new Date(start.getTime()-1),35);
+    while(t&&t.date<end){res.push({q,name:names[q],t:t.date});t=A.SearchMoonPhase(q*90,new Date(t.date.getTime()+25*864e5),10);}
+  }
+  return res.sort((a,b)=>a.t-b.t);
+}
+function renderCal(){
+  document.getElementById('calttl').textContent=`${cy} 年 ${cm} 月`;
+  const first=twDate(cy,cm,1), w0=tw(first).w;
+  const nd=new Date(Date.UTC(cy,cm,0)).getUTCDate();
+  const ph=mainPhases(cy,cm); const phDay={};ph.forEach(p=>{phDay[dayKey(p.t)]=p.name;});
+  const td=tw(now);
+  let h=[...DOW].map(x=>`<div class="dow">${x}</div>`).join('');
+  for(let i=0;i<w0;i++)h+='<div class="day empty"></div>';
+  for(let d=1;d<=nd;d++){
+    const k=`${cy}-${cm}-${d}`, at=twDate(cy,cm,d,21);
+    const deg=moonPhaseDeg(at);
+    const isT=(td.y===cy&&td.m===cm&&td.d===d);
+    h+=`<div class="day${isT?' today':''}${metDays[k]?' met':''}" title="${cm}/${d} 21:00 月亮亮面 ${Math.round(moonFrac(at)*100)}%"><span class="d">${d}</span>${moonSVG(deg,30)}${phDay[k]?`<span class="ph">${phDay[k]}</span>`:`<span class="lu">${lunarDay(cy,cm,d)}</span>`}${metDays[k]?`<span class="mt">${metDays[k].replace('流星雨','')}</span>`:''}</div>`;
+  }
+  document.getElementById('cal').innerHTML=h;
+  document.getElementById('phaselist').innerHTML=ph.map(p=>`<div>${moonSVG(p.q*90,18)} <b>${p.name}</b>　${fFull(p.t)}</div>`).join('');
+}
+document.getElementById('prev').onclick=()=>{cm--;if(cm<1){cm=12;cy--;}renderCal();};
+document.getElementById('next').onclick=()=>{cm++;if(cm>12){cm=1;cy++;}renderCal();};
+document.getElementById('thism').onclick=()=>{cy=tw(now).y;cm=tw(now).m;renderCal();};
+renderCal();
+
+// ===== 其他天象 =====
+const EV=[];const END=new Date(now.getTime()+366*864e5);
+// 月食
+{let e=A.SearchLunarEclipse(now);for(let i=0;i<4&&e&&e.peak.date<END;i++){
+  const a=alt('Moon',e.peak.date);
+  if(a>0){const kind={penumbral:'半影月食',partial:'月偏食',total:'月全食'}[e.kind];
+    EV.push({t:e.peak.date,tt:kind,ds:`食甚 ${fTime(e.peak.date)}，月亮高度約 ${Math.round(a)}°。${e.kind==='penumbral'?'半影月食變暗很不明顯，要仔細比較才看得出來。':'不需要任何器材，肉眼就能看。'}`});}
+  e=A.NextLunarEclipse(e.peak);}}
+// 日食（車城看得到）
+{let e=A.SearchLocalSolarEclipse(now,OB);for(let i=0;i<3&&e&&e.peak.time.date<END;i++){
+  if(e.peak.altitude>0){const kind={partial:'日偏食',annular:'日環食',total:'日全食'}[e.kind];
+    EV.push({t:e.peak.time.date,tt:kind,ds:`車城看得到，食甚 ${fTime(e.peak.time.date)}。一定要用合格的日食眼鏡或投影法觀察，不能直接看太陽。`});}
+  e=A.NextLocalSolarEclipse(e.peak.time.date,OB);}}
+// 行星衝
+for(const [b,zh] of [['Mars','火星'],['Jupiter','木星'],['Saturn','土星']]){
+  try{const t=A.SearchRelativeLongitude(b,0,now);if(t.date<END){const mag=A.Illumination(b,t.date).mag;
+    EV.push({t:t.date,tt:`${zh}衝`,ds:`${zh}和太陽在地球兩側，整晚都看得到，也是一年中最亮（約 ${mag.toFixed(1)} 等）、望遠鏡裡最大的時候。`});}}catch(e){}
+}
+// 水星、金星東西大距
+for(const [b,zh] of [['Mercury','水星'],['Venus','金星']]){
+  let t=now;for(let i=0;i<(b==='Mercury'?6:2);i++){
+    try{const el=A.SearchMaxElongation(b,t);if(el.time.date>END)break;
+      const ev=el.visibility==='evening';
+      EV.push({t:el.time.date,tt:`${zh}${ev?'東':'西'}大距`,ds:`${zh}離太陽最遠（${el.elongation.toFixed(0)}°），${ev?'日落後在西方低空':'日出前在東方低空'}最容易看到。`});
+      t=new Date(el.time.date.getTime()+10*864e5);}catch(e){break;}
+  }
+}
+// 二分二至
+{const y0=tw(now).y;for(const y of [y0,y0+1]){const s=A.Seasons(y);
+  [[s.mar_equinox,'春分','白天和黑夜差不多一樣長。'],[s.jun_solstice,'夏至','一年中白天最長，正午太陽最高。車城在北回歸線以南，這天正午太陽會稍微偏北。'],[s.sep_equinox,'秋分','白天和黑夜差不多一樣長。'],[s.dec_solstice,'冬至','一年中白天最短，正午太陽最低。']].forEach(([t,n,d])=>{if(t.date>now&&t.date<END)EV.push({t:t.date,tt:n,ds:d});});}}
+// 月掩／月亮接近亮行星（< 2°，晚上看得到）
+{const PL=[['Venus','金星'],['Mars','火星'],['Jupiter','木星'],['Saturn','土星']];
+ for(let x=now.getTime();x<END.getTime();x+=6*3600e3){
+   const d=new Date(x);
+   for(const [b,zh] of PL){
+     const sep=A.AngleBetween(A.GeoVector('Moon',d,true),A.GeoVector(b,d,true));
+     if(sep<2.5){
+       // 找最接近的時刻
+       let bt=d,bs=sep;for(let y=x-6*3600e3;y<x+6*3600e3;y+=30*60e3){const s2=A.AngleBetween(A.GeoVector('Moon',new Date(y),true),A.GeoVector(b,new Date(y),true));if(s2<bs){bs=s2;bt=new Date(y);}}
+       const ma=alt('Moon',bt), sa=alt('Sun',bt);
+       if(ma>10&&sa<-6&&!EV.some(e=>e.tt.includes(zh)&&Math.abs(e.t-bt)<3*864e5))
+         EV.push({t:bt,tt:`月亮靠近${zh}`,ds:`兩者相距約 ${bs.toFixed(1)}°（大約一根手指寬），${fTime(bt)} 左右最近，肉眼就很好認。`});
+     }
+   }
+ }}
+EV.sort((a,b)=>a.t-b.t);
+document.getElementById('events').innerHTML=EV.map(e=>`<div class="ev"><div class="dt">${fDate(e.t)}<br><span style="font-weight:400;color:var(--tx2);font-size:13px">${tw(e.t).y}</span></div><div><div class="tt">${e.tt}</div><div class="ds">${e.ds}</div></div></div>`).join('')||'<p class="hint">接下來一年沒有算到特別的天象。</p>';
+})();
+</script>
+</body>
+</html>

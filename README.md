@@ -4,6 +4,7 @@
 
 | 工具 | 網址（QR 碼請指向這些固定網址） |
 |---|---|
+| 最近的天空大事（自動計算） | /sky/ |
 | 太陽系模擬器 | /tools/solar-system/ |
 | 月相模擬器 | /tools/moon-phase/ |
 | 潮汐模擬器 | /tools/tides/ |
