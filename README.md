@@ -11,7 +11,7 @@
 | 天球太陽軌跡 | /tools/sun-path/ |
 | 星座視差視覺化 | /tools/parallax/ |
 | 互動式赫羅圖 | /tools/hr-diagram/ |
-| 車城四季全天星圖 | /tools/sky-chart/ |
+| 四季星空認星歌（PDF） | /print/four-seasons-star-song.pdf |
 
 - 每個工具都是單一 HTML 檔，下載後可離線使用。
 - 工具資料夾名稱（網址）一旦公開就不要改，以免已印出的 QR 碼失效。
