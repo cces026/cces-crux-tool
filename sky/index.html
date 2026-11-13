@@ -68,8 +68,16 @@ h2{font-size:21px;margin:30px 0 12px;color:var(--gold)}
 .ev .tt{font-weight:700}
 .ev .ds{color:var(--tx2);font-size:14px}
 .hint{color:var(--tx2);font-size:13px;margin-top:10px}
+.tabs{position:sticky;top:0;z-index:5;display:flex;gap:6px;overflow-x:auto;padding:10px 0;margin:8px 0 4px;background:linear-gradient(var(--bg) 80%,transparent)}
+.tabs button{flex:1 0 auto;background:var(--card);color:var(--tx2);border:1px solid var(--line);border-radius:999px;padding:8px 16px;font-size:15px;cursor:pointer;font-family:inherit}
+.tabs button[aria-selected="true"]{background:var(--gold);color:#1a1300;border-color:var(--gold);font-weight:700}
+.tp{display:none}.tp.on{display:block}
+.tp>h2:first-child{margin-top:14px}
+@media print{.tabs{display:none}.tp{display:block}}
 footer{max-width:1080px;margin:0 auto;padding:24px 20px 48px;color:var(--tx2);font-size:13px;border-top:1px solid var(--line)}
 @media (max-width:640px){
+ .tabs button{padding:8px 10px;font-size:14px}
+ .kv{grid-template-columns:1fr 1fr}
  .tonight{grid-template-columns:1fr;justify-items:center;text-align:center}
  .day{min-height:66px;padding:4px 1px}.day .lu,.day .mt{display:none}
  .ev{grid-template-columns:1fr;gap:2px}
@@ -88,14 +96,27 @@ footer{max-width:1080px;margin:0 auto;padding:24px 20px 48px;color:var(--tx2);fo
   <p class="lead">從車城（北緯 22.07°、東經 120.71°）看出去的流星雨、月相、日月食和行星。每次打開都會依今天的日期重新計算，時間都是台灣時間。</p>
 </header>
 <main>
+  <nav class="tabs" role="tablist">
+    <button role="tab" data-t="tonight">🌙 今晚</button>
+    <button role="tab" data-t="meteor">☄️ 流星雨</button>
+    <button role="tab" data-t="moon">🌗 月相</button>
+    <button role="tab" data-t="events">🔭 其他天象</button>
+  </nav>
+  <section class="tp" id="tp-tonight">
   <h2>🌙 今晚的天空</h2>
   <div class="panel tonight" id="tonight"></div>
+  <h2>⏭️ 接下來最近的</h2>
+  <div class="evlist" id="soon"></div>
 
+  </section>
+  <section class="tp" id="tp-meteor">
   <h2>☄️ 接下來一年的流星雨</h2>
   <p class="sub">星等是依車城的位置、輻射點高度和當晚月光算出來的觀測條件，金框是最近一場。</p>
   <div class="meteors" id="meteors"></div>
   <p class="hint">「每小時最多」是在完全黑暗、輻射點在頭頂時的理想數字（ZHR）。在車城實際看到的通常只有它的三分之一到一半，有路燈的地方更少。峰值時間有半天左右的誤差，前後一晚也值得看。</p>
 
+  </section>
+  <section class="tp" id="tp-moon">
   <h2>🌗 月相月曆</h2>
   <div class="panel">
     <div class="calnav"><button id="prev" aria-label="上個月">◀</button><div class="ttl" id="calttl"></div><button id="next" aria-label="下個月">▶</button><button id="thism">回到這個月</button></div>
@@ -104,9 +125,12 @@ footer{max-width:1080px;margin:0 auto;padding:24px 20px 48px;color:var(--tx2);fo
     <p class="hint">日期下的小字是農曆日（初一＝新月那天）。藍底的日子是流星雨極大期。</p>
   </div>
 
+  </section>
+  <section class="tp" id="tp-events">
   <h2>🔭 其他天象（接下來一年）</h2>
   <div class="evlist" id="events"></div>
   <p class="hint">日月食只列在車城看得到的。行星「衝」的前後一個月，整晚都看得到那顆行星，是觀察的好時機。</p>
+  </section>
 </main>
 <footer>
   天象由 <a href="https://github.com/cosinekitty/astronomy">Astronomy Engine</a>（Don Cross，MIT 授權）即時計算；流星雨極大期依國際流星組織（IMO）公布的太陽黃經推算。© 車城國小 南十字天文台
@@ -364,7 +388,24 @@ for(const [b,zh] of [['Mercury','水星'],['Venus','金星']]){
    }
  }}
 EV.sort((a,b)=>a.t-b.t);
+{const nm=MET.find(x=>x.isNext);const ne=EV.slice(0,2);
+ document.getElementById('soon').innerHTML=(nm?`<a href="#meteor" style="text-decoration:none;color:inherit"><div class="ev"><div class="dt">${nm.nightLbl.split('、')[0]}</div><div><div class="tt">☄️ ${nm.zh} ${'★'.repeat(nm.stars)}</div><div class="ds">${nm.moonTxt}；${nm.bestTxt}</div></div></div></a>`:'')+
+ ne.map(e=>`<a href="#events" style="text-decoration:none;color:inherit"><div class="ev"><div class="dt">${fDate(e.t)}</div><div><div class="tt">🔭 ${e.tt}</div><div class="ds">${e.ds}</div></div></div></a>`).join('');}
 document.getElementById('events').innerHTML=EV.map(e=>`<div class="ev"><div class="dt">${fDate(e.t)}<br><span style="font-weight:400;color:var(--tx2);font-size:13px">${tw(e.t).y}</span></div><div><div class="tt">${e.tt}</div><div class="ds">${e.ds}</div></div></div>`).join('')||'<p class="hint">接下來一年沒有算到特別的天象。</p>';
+})();
+</script>
+<script>
+(function(){
+  const bs=[...document.querySelectorAll('.tabs button')];
+  function show(t,push){
+    if(!document.getElementById('tp-'+t))t='tonight';
+    bs.forEach(b=>b.setAttribute('aria-selected',b.dataset.t===t));
+    document.querySelectorAll('.tp').forEach(p=>p.classList.toggle('on',p.id==='tp-'+t));
+    if(push)history.replaceState(null,'','#'+t);
+  }
+  bs.forEach(b=>b.onclick=()=>{show(b.dataset.t,true);window.scrollTo({top:document.querySelector('.tabs').offsetTop-4,behavior:'smooth'});});
+  window.addEventListener('hashchange',()=>show(location.hash.slice(1)));
+  show(location.hash.slice(1)||'tonight');
 })();
 </script>
 </body>
