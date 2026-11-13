@@ -203,16 +203,16 @@ function lunarDay(y,m,d){
 // ===== 流星雨 =====
 // lam: IMO 太陽黃經（J2000），ra 度, dec 度, zhr
 const SHOWERS=[
- {zh:'象限儀座流星雨',en:'Quadrantids',lam:283.15,ra:230,dec:49,zhr:80,src:'2003 EH1（小行星）',note:'峰值很尖，只有幾個小時，要抓準時間。'},
- {zh:'天琴座流星雨',en:'Lyrids',lam:32.32,ra:271,dec:34,zhr:18,src:'柴契爾彗星',note:'偶爾有明亮火流星。'},
- {zh:'寶瓶座η流星雨',en:'η Aquariids',lam:45.5,ra:338,dec:-1,zhr:50,src:'哈雷彗星',note:'對台灣比對北方國家好看，只能在天亮前看。'},
- {zh:'南寶瓶座δ流星雨',en:'S. δ Aquariids',lam:127,ra:340,dec:-16,zhr:25,src:'96P 彗星',note:'輻射點偏南，車城的緯度看起來比北台灣好。'},
- {zh:'英仙座流星雨',en:'Perseids',lam:140.0,ra:48,dec:58,zhr:100,src:'斯威夫特－塔特爾彗星',note:'暑假最好看的一場，後半夜最多。'},
- {zh:'獵戶座流星雨',en:'Orionids',lam:208,ra:95,dec:16,zhr:20,src:'哈雷彗星',note:'速度快，常留下餘痕。'},
- {zh:'北金牛座流星雨',en:'N. Taurids',lam:230,ra:58,dec:22,zhr:5,src:'恩克彗星',note:'數量少，但常有慢速的大火球。'},
- {zh:'獅子座流星雨',en:'Leonids',lam:235.27,ra:152,dec:22,zhr:15,src:'坦普爾－塔特爾彗星',note:'速度最快的流星雨之一，輻射點半夜才升起。'},
- {zh:'雙子座流星雨',en:'Geminids',lam:261.85,ra:112,dec:33,zhr:150,src:'法厄松（小行星）',note:'一年中最穩定、最多的一場，晚上九點後就開始有。'},
- {zh:'小熊座流星雨',en:'Ursids',lam:270.65,ra:217,dec:75,zhr:10,src:'塔特爾彗星',note:'輻射點在北方低空，車城看起來比較吃虧。'}
+ {zh:'象限儀座流星雨',en:'Quadrantids',B:2.5,lam:283.15,ra:230,dec:49,zhr:80,src:'2003 EH1（小行星）',note:'峰值非常尖，前後幾個小時數量就掉很多。極大期如果落在台灣的白天，凌晨能看到的就少很多。'},
+ {zh:'天琴座流星雨',en:'Lyrids',B:0.22,lam:32.32,ra:271,dec:34,zhr:18,src:'柴契爾彗星',note:'偶爾有明亮火流星。'},
+ {zh:'寶瓶座η流星雨',en:'η Aquariids',B:0.08,lam:45.5,ra:338,dec:-1,zhr:50,src:'哈雷彗星',note:'對台灣比對北方國家好看，只能在天亮前看。'},
+ {zh:'南寶瓶座δ流星雨',en:'S. δ Aquariids',B:0.09,lam:127,ra:340,dec:-16,zhr:25,src:'96P 彗星',note:'輻射點偏南，車城的緯度看起來比北台灣好。'},
+ {zh:'英仙座流星雨',en:'Perseids',B:0.2,lam:140.0,ra:48,dec:58,zhr:100,src:'斯威夫特－塔特爾彗星',note:'暑假最好看的一場，後半夜最多。'},
+ {zh:'獵戶座流星雨',en:'Orionids',B:0.12,lam:208,ra:95,dec:16,zhr:20,src:'哈雷彗星',note:'速度快，常留下餘痕。'},
+ {zh:'北金牛座流星雨',en:'N. Taurids',B:0.03,lam:230,ra:58,dec:22,zhr:5,src:'恩克彗星',note:'數量少，但常有慢速的大火球。'},
+ {zh:'獅子座流星雨',en:'Leonids',B:0.39,lam:235.27,ra:152,dec:22,zhr:15,src:'坦普爾－塔特爾彗星',note:'速度最快的流星雨之一，輻射點半夜才升起。'},
+ {zh:'雙子座流星雨',en:'Geminids',B:0.4,lam:261.85,ra:112,dec:33,zhr:150,src:'法厄松（小行星）',note:'一年中最穩定、最多的一場，晚上九點後就開始有。'},
+ {zh:'小熊座流星雨',en:'Ursids',B:0.61,lam:270.65,ra:217,dec:75,zhr:10,src:'塔特爾彗星',note:'輻射點在北方低空，車城看起來比較吃虧。'}
 ];
 const PREC=0.3597+1.397*((now.getUTCFullYear()-2026)/100); // J2000 → 當日黃經
 function showerEvents(){
@@ -226,7 +226,7 @@ function showerEvents(){
     const nightStart= p.h<12? twDate(p.y,p.m,p.d-1,12): twDate(p.y,p.m,p.d,12);
     const a=tw(nightStart), b=tw(new Date(nightStart.getTime()+864e5));
     let nightLbl=`${a.m}/${a.d}–${b.m}/${b.d} 夜`;
-    if(p.h>=8&&p.h<17){ // 峰值落在台灣白天：前後兩晚都列
+    if(p.h>=8&&p.h<17&&s.B<0.5){ // 峰值落在台灣白天（且峰寬夠）：前後兩晚都列
       const z=tw(new Date(nightStart.getTime()-864e5));
       nightLbl=`${z.m}/${z.d}–${a.m}/${a.d} 夜、${a.m}/${a.d}–${b.m}/${b.d} 夜`;
     }
@@ -242,8 +242,9 @@ function showerEvents(){
       if(ra>5&&!radRise)radRise=d;
       const ma=alt('Moon',d), mf=moonFrac(d);
       const moonPen= ma>0? (1-0.75*mf): 1;
-      const sc= ra>0? s.zhr*Math.sin(ra*Math.PI/180)*moonPen : 0;
-      if(sc>best.score)best={score:sc,t:d,ra,ma,mf};
+      const pk=Math.pow(10,-s.B*Math.abs(d-peak)/864e5*0.9856);
+      const sc= ra>0? s.zhr*pk*Math.sin(ra*Math.PI/180)*moonPen : 0;
+      if(sc>best.score)best={score:sc,t:d,ra,ma,mf,pk};
     }
     const mf=moonFrac(peak), mph=moonPhaseDeg(peak);
     // 月亮在暗夜時段裡出現的比例
@@ -258,8 +259,9 @@ function showerEvents(){
     else if(moonUp<0.7)moonTxt=`月亮 ${Math.round(mf*100)}%，${best.ma<=0?'等月亮下山後再看':'會有一段時間被月光干擾'}`;
     else moonTxt=`月亮 ${Math.round(mf*100)}%，整晚月光干擾`;
     const bestTxt=best.t?`最佳時段約 ${fTime(best.t)}`:'車城看不太到輻射點';
+    const missTxt=(best.pk!==undefined&&best.pk<0.6)?`那時離極大期還有幾個小時，數量大約只剩極大時的 ${Math.max(1,Math.round(best.pk*10))} 成。`:'';
     const radTxt=radRise?`輻射點 ${fTime(radRise)} 後升到夠高`:'';
-    out.push({...s,peak,peakTxt,nightLbl,stars,moonTxt,bestTxt,radTxt,mph,est:Math.round(best.score/2)});
+    out.push({...s,missTxt,peak,peakTxt,nightLbl,stars,moonTxt,bestTxt,radTxt,mph,est:Math.round(best.score/2)});
   }
   out.sort((a,b)=>a.peak-b.peak);
   return out;
@@ -279,7 +281,7 @@ document.getElementById('meteors').innerHTML=MET.map(s=>{
     <div class="rate">${s.peakTxt}</div>
     <div class="rate">${s.en} · 每小時最多約 ${s.zhr} 顆 · 母天體：${s.src}</div>
     <div class="mrow">${moonSVG(s.mph,28)}<span>${s.moonTxt}</span></div>
-    <div class="tip">⏰ ${s.bestTxt}${s.radTxt?'；'+s.radTxt:''}</div>
+    <div class="tip">⏰ ${s.bestTxt}${s.radTxt?'；'+s.radTxt:''}</div>${s.missTxt?`<div class="tip" style="color:var(--bad)">⚠️ ${s.missTxt}</div>`:''}
     <div class="tip" style="color:var(--tx2)">${s.note}</div>
   </div>`;}).join('');
 
