@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0e0e16">
+<title>太陽系比例尺換算器 — 南十字天文台</title>
+<style>
+  :root {
+    --bg: #0e0e16;
+    --panel: #1a1a25;
+    --panel-2: #232333;
+    --panel-3: #2d2d3f;
+    --border: #36364a;
+    --text: #ecedf5;
+    --text-2: #9a9ab0;
+    --text-3: #6b6b85;
+    --accent: #ffd966;
+    --accent-blue: #6cc1ff;
+    --accent-red: #ff7a7a;
+    --accent-green: #a3e4a3;
+    --row-hover: rgba(255, 217, 102, 0.05);
+    --shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, "PingFang TC", "Microsoft JhengHei", "Noto Sans TC", system-ui, sans-serif;
+  }
+  body { min-height: 100vh; padding: 20px; }
+  .app { max-width: 1280px; margin: 0 auto; display: grid; gap: 16px; }
+
+  header { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; }
+  header h1 { margin: 0; font-size: 24px; font-weight: 600; color: var(--accent); }
+  header .sub { color: var(--text-2); font-size: 13px; }
+
+  .banner {
+    background: linear-gradient(90deg, rgba(108, 193, 255, 0.10), rgba(255, 217, 102, 0.10));
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 16px;
+    font-size: 13.5px;
+    color: var(--text-2);
+    line-height: 1.6;
+  }
+  .banner strong { color: var(--accent-blue); }
+  .banner .hl { color: var(--accent); }
+
+  .controls-row {
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+    gap: 12px;
+  }
+  @media (max-width: 880px) {
+    .controls-row { grid-template-columns: 1fr; }
+  }
+  .ctrl-block {
+    background: var(--panel);
+    border-radius: 12px;
+    padding: 14px 16px;
+    box-shadow: var(--shadow);
+  }
+  .ctrl-block > label {
+    display: block; font-size: 12px; color: var(--text-3);
+    letter-spacing: 0.5px; margin-bottom: 8px; font-weight: 500;
+  }
+  .btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .btn {
+    background: var(--panel-3); color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 8px 12px; font-size: 13px; font-family: inherit;
+    cursor: pointer; transition: all 0.15s;
+  }
+  .btn:hover { background: #3a3a52; border-color: var(--accent); }
+  .btn.primary { background: rgba(255, 217, 102, 0.18); border-color: var(--accent); color: var(--accent); }
+  .btn.primary:hover { background: rgba(255, 217, 102, 0.28); }
+  .btn.danger { background: rgba(255, 122, 122, 0.10); border-color: var(--accent-red); color: var(--accent-red); }
+  .btn.danger:hover { background: rgba(255, 122, 122, 0.20); }
+
+  .scale-display { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 640px) {
+    .scale-display { grid-template-columns: 1fr; }
+  }
+  .scale-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 18px;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .scale-card .lbl { font-size: 12px; color: var(--text-3); letter-spacing: 0.5px; }
+  .scale-card .val { font-size: 18px; color: var(--accent); font-variant-numeric: tabular-nums; font-weight: 500; }
+  .scale-card .sub { font-size: 12px; color: var(--text-2); }
+  .scale-card.locked { border-color: rgba(108, 193, 255, 0.5); }
+  .scale-card.locked .val { color: var(--accent-blue); }
+
+  .table-wrap {
+    background: var(--panel);
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    overflow-x: auto;
+  }
+  table { width: 100%; border-collapse: collapse; min-width: 760px; }
+  thead { background: var(--panel-2); }
+  th, td { padding: 12px 14px; text-align: left; font-size: 14px; border-bottom: 1px solid var(--border); }
+  th { color: var(--text-3); font-weight: 500; font-size: 12px; letter-spacing: 0.5px; text-transform: uppercase; }
+  tbody tr:hover { background: var(--row-hover); }
+  tbody tr.sun-row { background: rgba(255, 217, 102, 0.06); }
+  tbody tr.sun-row:hover { background: rgba(255, 217, 102, 0.12); }
+  tbody tr.special-row { background: rgba(108, 193, 255, 0.04); border-top: 1px dashed var(--border); }
+
+  td.body-name { font-weight: 500; color: var(--text); white-space: nowrap; }
+  td.body-name .icon { display: inline-block; width: 22px; text-align: center; margin-right: 4px; }
+  td.real { color: var(--text-2); font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 13px; }
+  td.real .au { color: var(--text-3); font-size: 11.5px; display: block; margin-top: 2px; }
+  td.real.dash { color: var(--text-3); font-style: italic; }
+
+  .input-group { display: flex; gap: 4px; align-items: stretch; }
+  .input-group input {
+    flex: 1; min-width: 0; width: 100%;
+    background: var(--panel-3); color: var(--text);
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 7px 10px; font-size: 14px; font-family: inherit;
+    font-variant-numeric: tabular-nums;
+  }
+  .input-group input:focus { outline: 1px solid var(--accent); border-color: var(--accent); background: #353550; }
+  .input-group input::placeholder { color: var(--text-3); }
+  .input-group input.dim { color: var(--text-2); }
+  .input-group input.active-edit { color: var(--accent); background: rgba(255, 217, 102, 0.08); border-color: var(--accent); }
+
+  .input-group select {
+    width: 56px;
+    background: var(--panel-3); color: var(--text-2);
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 6px 4px; font-size: 12px; font-family: inherit; cursor: pointer;
+    appearance: none; text-align: center;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 12 12'><path d='M3 4.5l3 3 3-3' stroke='%239a9ab0' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+    background-repeat: no-repeat; background-position: right 4px center;
+    padding-right: 16px;
+  }
+  .input-group select:focus { outline: 1px solid var(--accent); border-color: var(--accent); }
+
+  .notes {
+    background: var(--panel);
+    border-radius: 12px;
+    padding: 16px 20px;
+    color: var(--text-2);
+    font-size: 13px;
+    line-height: 1.65;
+  }
+  .notes h3 { margin: 0 0 10px 0; font-size: 14px; color: var(--text); font-weight: 500; }
+  .notes ul { margin: 0; padding-left: 22px; }
+  .notes li { margin: 4px 0; }
+  .notes code {
+    background: var(--panel-3);
+    padding: 1px 6px; border-radius: 4px;
+    color: var(--accent);
+    font-size: 12.5px;
+  }
+
+  .comparison-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 18px;
+    display: none;
+  }
+  .comparison-card.show { display: block; }
+  .comparison-card h3 { margin: 0 0 8px 0; font-size: 14px; color: var(--accent); font-weight: 500; }
+  .comparison-card ul { margin: 0; padding-left: 18px; color: var(--text-2); font-size: 13px; line-height: 1.7; }
+  .comparison-card .num { color: var(--accent-blue); font-variant-numeric: tabular-nums; font-weight: 500; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>☀️ 太陽系比例尺換算器</h1>
+    <span class="sub">南十字天文台 · 填一格其他自動算</span>
+  </header>
+
+  <div class="banner">
+    <strong>用法</strong>:在任何一格「模型直徑」或「模型距離」填入數字 → 其他欄位會依比例自動算出。<br>
+    <span class="hl">統一比例</span>:大小和距離用「同一個」比例尺(真實感受太陽系有多空)。<br>
+    <span class="hl">分開比例</span>:大小、距離各自獨立(實務做模型時用,因為等比例下行星會小到看不見)。
+  </div>
+
+  <div class="controls-row">
+    <div class="ctrl-block">
+      <label>比例模式</label>
+      <div class="btn-row">
+        <button class="btn primary" data-mode="unified">統一比例(等比例)</button>
+        <button class="btn" data-mode="split">分開比例</button>
+      </div>
+    </div>
+    <div class="ctrl-block">
+      <label>常用預設</label>
+      <div class="btn-row">
+        <button class="btn" data-preset="basketball">太陽=籃球(24 cm)</button>
+        <button class="btn" data-preset="soccer">太陽=足球(22 cm)</button>
+        <button class="btn" data-preset="orange">太陽=橘子(8 cm)</button>
+        <button class="btn" data-preset="meter">太陽=1 m</button>
+        <button class="btn" data-preset="papertape">紙帶 1m = 太陽到冥王星</button>
+        <button class="btn" data-preset="walkjupiter">操場 70 m = 太陽到木星</button>
+        <button class="btn" data-preset="campus130">校園 130 m = 太陽到海王星</button>
+        <button class="btn" data-preset="campus130uni">校園 130 m + 統一比例</button>
+        <button class="btn danger" data-preset="reset">清空</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="scale-display">
+    <div class="scale-card" id="size-scale-card">
+      <div class="lbl">📏 大小比例尺</div>
+      <div class="val" id="scale-size">—</div>
+      <div class="sub" id="scale-size-sub">尚未設定。填任一「模型直徑」即可。</div>
+    </div>
+    <div class="scale-card" id="dist-scale-card">
+      <div class="lbl">📐 距離比例尺</div>
+      <div class="val" id="scale-distance">—</div>
+      <div class="sub" id="scale-distance-sub">尚未設定。填任一「模型距離」即可。</div>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>天體</th>
+          <th>真實直徑</th>
+          <th style="color: var(--accent);">模型直徑(填我)</th>
+          <th>真實距太陽</th>
+          <th style="color: var(--accent);">模型距太陽(填我)</th>
+        </tr>
+      </thead>
+      <tbody id="bodies-tbody"></tbody>
+    </table>
+  </div>
+
+  <div class="comparison-card" id="comparison-card">
+    <h3>🌟 對應到現實世界的比較</h3>
+    <ul id="comparison-list"></ul>
+  </div>
+
+  <div class="notes">
+    <h3>📝 備註與小知識</h3>
+    <ul>
+      <li>單位:<code>mm</code> 公釐、<code>cm</code> 公分、<code>m</code> 公尺、<code>km</code> 公里。</li>
+      <li><strong>月球</strong>的「距太陽」欄實際標的是「距地球」(38.4 萬公里),因為月球繞地球而不是繞太陽。</li>
+      <li><strong>比鄰星</strong>距離 = 4.243 光年 ≈ 4.01×10<sup>13</sup> 公里;直徑用了估計值(半徑 ≈ 0.14 R<sub>太陽</sub>)。</li>
+      <li>「統一比例」下,把太陽縮到籃球(24 cm),地球就只有約 2.2 mm(芝麻),距離卻有 26 公尺 ── 這就是太陽系真正的「空」。</li>
+      <li>使用者手動切換單位後,該格的單位會被鎖定(不會被自動覆蓋);點「清空」可重置。</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+const BODIES = [
+  { key:'sun',     name:'太陽',           icon:'☀️', diameterKm: 1392700,  distanceKm: null,        dUnit:'cm', distUnit:'cm', distLabel:null },
+  { key:'mercury', name:'水星',           icon:'☿',  diameterKm: 4879,     distanceKm: 5.791e7,     dUnit:'mm', distUnit:'m' },
+  { key:'venus',   name:'金星',           icon:'♀',  diameterKm: 12104,    distanceKm: 1.082e8,     dUnit:'mm', distUnit:'m' },
+  { key:'earth',   name:'地球',           icon:'🌍', diameterKm: 12756,    distanceKm: 1.496e8,     dUnit:'mm', distUnit:'m' },
+  { key:'moon',    name:'月球',           icon:'🌙', diameterKm: 3475,     distanceKm: 3.844e5,     dUnit:'mm', distUnit:'cm', distLabel:'距地球' },
+  { key:'mars',    name:'火星',           icon:'♂',  diameterKm: 6792,     distanceKm: 2.279e8,     dUnit:'mm', distUnit:'m' },
+  { key:'jupiter', name:'木星',           icon:'♃',  diameterKm: 142984,   distanceKm: 7.785e8,     dUnit:'cm', distUnit:'m' },
+  { key:'saturn',  name:'土星',           icon:'♄',  diameterKm: 120536,   distanceKm: 1.434e9,     dUnit:'cm', distUnit:'m' },
+  { key:'uranus',  name:'天王星',         icon:'♅',  diameterKm: 51118,    distanceKm: 2.871e9,     dUnit:'mm', distUnit:'m' },
+  { key:'neptune', name:'海王星',         icon:'♆',  diameterKm: 49528,    distanceKm: 4.498e9,     dUnit:'mm', distUnit:'m' },
+  { key:'pluto',   name:'冥王星(矮)',    icon:'♇',  diameterKm: 2376,     distanceKm: 5.906e9,     dUnit:'mm', distUnit:'m' },
+  { key:'proxima', name:'比鄰星',         icon:'✦',  diameterKm: 195000,   distanceKm: 4.0114e13,   dUnit:'mm', distUnit:'km', distLabel:'最近恆星' }
+];
+
+const UNIT_TO_KM = { mm: 1e-6, cm: 1e-5, m: 1e-3, km: 1 };
+const AU_KM = 1.496e8;
+
+let sizeScale = null;
+let distScale = null;
+let mode = 'unified';
+let lastEditedInput = null;
+
+function fmtRealKm(km) {
+  if (km === null || km === undefined) return '—';
+  if (km >= 1e9) return (km/1e9).toFixed(3) + ' × 10⁹ km';
+  if (km >= 1e6) return (km/1e6).toFixed(3) + ' × 10⁶ km';
+  if (km >= 1e4) return km.toLocaleString('en-US', {maximumFractionDigits:0}) + ' km';
+  if (km >= 1) return km.toLocaleString('en-US', {maximumFractionDigits:0}) + ' km';
+  return km.toFixed(2) + ' km';
+}
+
+function fmtAU(km) {
+  if (km === null) return '';
+  const au = km / AU_KM;
+  if (au < 0.01) return '';
+  if (au < 1) return '(' + au.toFixed(3) + ' AU)';
+  if (au < 100) return '(' + au.toFixed(2) + ' AU)';
+  return '(' + au.toFixed(0) + ' AU)';
+}
+
+function fmtModel(value) {
+  if (!isFinite(value) || value <= 0) return '';
+  const abs = Math.abs(value);
+  if (abs >= 100000) return value.toExponential(3);
+  if (abs >= 10000) return value.toFixed(0);
+  if (abs >= 1000) return value.toFixed(1);
+  if (abs >= 100) return value.toFixed(2);
+  if (abs >= 10) return value.toFixed(3);
+  if (abs >= 1) return value.toFixed(4);
+  if (abs >= 0.1) return value.toFixed(5);
+  if (abs >= 0.01) return value.toFixed(5);
+  if (abs >= 0.001) return value.toFixed(6);
+  if (abs >= 0.0001) return value.toFixed(7);
+  return value.toExponential(3);
+}
+
+function fmtScale(scale) {
+  if (!scale || !isFinite(scale)) return '—';
+  const oneCm_km = 1e-5 / scale;
+  let realStr;
+  if (oneCm_km >= 1e6) realStr = (oneCm_km/1e6).toFixed(2) + ' 百萬 km(' + (oneCm_km/AU_KM).toFixed(2) + ' AU)';
+  else if (oneCm_km >= 1e4) realStr = (oneCm_km/1e4).toFixed(1) + ' 萬 km';
+  else if (oneCm_km >= 1) realStr = oneCm_km.toFixed(0) + ' km';
+  else if (oneCm_km >= 0.001) realStr = (oneCm_km*1000).toFixed(1) + ' m';
+  else if (oneCm_km >= 0.00001) realStr = (oneCm_km*1e5).toFixed(2) + ' cm';
+  else realStr = (oneCm_km*1e6).toFixed(2) + ' mm';
+  return '模型 1 cm = 真實 ' + realStr;
+}
+
+function fmtScaleSub(scale) {
+  if (!scale || !isFinite(scale)) return '';
+  const ratio = 1 / scale;
+  if (ratio >= 1e12) return '縮小倍率:約 ' + (ratio/1e12).toFixed(2) + ' 兆倍';
+  if (ratio >= 1e8)  return '縮小倍率:約 ' + (ratio/1e8).toFixed(2) + ' 億倍';
+  if (ratio >= 1e4)  return '縮小倍率:約 ' + (ratio/1e4).toFixed(2) + ' 萬倍';
+  return '縮小倍率:約 ' + ratio.toFixed(0) + ' 倍';
+}
+
+function pickBestUnit(modelKm) {
+  // 目標:讓顯示數字落在合理範圍(約 0.1 ~ 1000)
+  if (modelKm <= 0 || !isFinite(modelKm)) return 'cm';
+  if (modelKm >= 1)      return 'km';    // ≥ 1 km 用 km
+  if (modelKm >= 1e-3)   return 'm';     // ≥ 1 m 用 m
+  if (modelKm >= 1e-5)   return 'cm';    // ≥ 1 cm 用 cm
+  return 'mm';                            // < 1 cm 用 mm
+}
+
+function renderTable() {
+  const tbody = document.getElementById('bodies-tbody');
+  tbody.innerHTML = '';
+  BODIES.forEach((b, idx) => {
+    const tr = document.createElement('tr');
+    tr.dataset.idx = idx;
+    if (b.key === 'sun') tr.className = 'sun-row';
+    if (b.key === 'moon' || b.key === 'proxima') tr.className = 'special-row';
+
+    const tdName = document.createElement('td');
+    tdName.className = 'body-name';
+    tdName.innerHTML = '<span class="icon">' + b.icon + '</span>' + b.name;
+    tr.appendChild(tdName);
+
+    const tdRealD = document.createElement('td');
+    tdRealD.className = 'real';
+    tdRealD.textContent = fmtRealKm(b.diameterKm);
+    tr.appendChild(tdRealD);
+
+    const tdModelD = document.createElement('td');
+    tdModelD.appendChild(buildInputGroup(b, 'size'));
+    tr.appendChild(tdModelD);
+
+    const tdRealDist = document.createElement('td');
+    if (b.distanceKm === null) {
+      tdRealDist.className = 'real dash';
+      tdRealDist.textContent = '— (太陽本身)';
+    } else {
+      tdRealDist.className = 'real';
+      const au = b.distLabel ? '<span class="au">' + b.distLabel + '</span>' : '<span class="au">' + fmtAU(b.distanceKm) + '</span>';
+      tdRealDist.innerHTML = fmtRealKm(b.distanceKm) + au;
+    }
+    tr.appendChild(tdRealDist);
+
+    const tdModelDist = document.createElement('td');
+    if (b.distanceKm === null) {
+      tdModelDist.className = 'real dash';
+      tdModelDist.textContent = '—';
+    } else {
+      tdModelDist.appendChild(buildInputGroup(b, 'dist'));
+    }
+    tr.appendChild(tdModelDist);
+
+    tbody.appendChild(tr);
+  });
+}
+
+function buildInputGroup(body, col) {
+  const wrap = document.createElement('div');
+  wrap.className = 'input-group';
+  wrap.dataset.bodyKey = body.key;
+  wrap.dataset.col = col;
+
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.inputMode = 'decimal';
+  input.placeholder = '0';
+  input.dataset.bodyKey = body.key;
+  input.dataset.col = col;
+  input.dataset.realKm = (col === 'size' ? body.diameterKm : body.distanceKm);
+  input.addEventListener('input', onInputChange);
+  input.addEventListener('focus', () => { lastEditedInput = input; input.classList.add('active-edit'); });
+  input.addEventListener('blur', () => input.classList.remove('active-edit'));
+  wrap.appendChild(input);
+
+  const sel = document.createElement('select');
+  ['mm', 'cm', 'm', 'km'].forEach(u => {
+    const opt = document.createElement('option');
+    opt.value = u; opt.textContent = u;
+    if (u === (col === 'size' ? body.dUnit : body.distUnit)) opt.selected = true;
+    sel.appendChild(opt);
+  });
+  sel.dataset.userSet = 'false';
+  sel.addEventListener('change', () => {
+    sel.dataset.userSet = 'true';
+    const realKm = parseFloat(input.dataset.realKm);
+    const relevantScale = (col === 'size') ? sizeScale : distScale;
+    if (relevantScale && isFinite(relevantScale)) {
+      const modelKm = realKm * relevantScale;
+      const newValue = modelKm / UNIT_TO_KM[sel.value];
+      input.value = fmtModel(newValue);
+    }
+  });
+  wrap.appendChild(sel);
+
+  return wrap;
+}
+
+function onInputChange(e) {
+  const input = e.target;
+  lastEditedInput = input;
+  const col = input.dataset.col;
+  const realKm = parseFloat(input.dataset.realKm);
+  const unit = input.parentElement.querySelector('select').value;
+  const raw = input.value.trim();
+  if (raw === '') return;
+  const value = parseFloat(raw);
+  if (!isFinite(value) || value <= 0) return;
+  const modelKm = value * UNIT_TO_KM[unit];
+  const scale = modelKm / realKm;
+  if (col === 'size') {
+    sizeScale = scale;
+    if (mode === 'unified') distScale = scale;
+  } else {
+    distScale = scale;
+    if (mode === 'unified') sizeScale = scale;
+  }
+  recomputeAll(input);
+  updateScaleDisplay();
+  updateComparison();
+}
+
+function recomputeAll(skipInput) {
+  document.querySelectorAll('#bodies-tbody .input-group').forEach(group => {
+    const input = group.querySelector('input');
+    if (input === skipInput) return;
+    const sel = group.querySelector('select');
+    const realKm = parseFloat(input.dataset.realKm);
+    if (!realKm) return;
+    const col = input.dataset.col;
+    const relevantScale = (col === 'size') ? sizeScale : distScale;
+    if (!relevantScale || !isFinite(relevantScale)) {
+      input.value = '';
+      input.classList.remove('dim');
+      return;
+    }
+    const modelKm = realKm * relevantScale;
+    if (sel.dataset.userSet !== 'true') {
+      sel.value = pickBestUnit(modelKm);
+    }
+    const value = modelKm / UNIT_TO_KM[sel.value];
+    input.value = fmtModel(value);
+    input.classList.add('dim');
+  });
+  if (skipInput) skipInput.classList.remove('dim');
+}
+
+function updateScaleDisplay() {
+  document.getElementById('scale-size').textContent = fmtScale(sizeScale);
+  document.getElementById('scale-size-sub').textContent = fmtScaleSub(sizeScale);
+  document.getElementById('scale-distance').textContent = fmtScale(distScale);
+  document.getElementById('scale-distance-sub').textContent = fmtScaleSub(distScale);
+  const sizeCard = document.getElementById('size-scale-card');
+  const distCard = document.getElementById('dist-scale-card');
+  sizeCard.classList.toggle('locked', mode === 'unified' && sizeScale !== null);
+  distCard.classList.toggle('locked', mode === 'unified' && distScale !== null);
+}
+
+function updateComparison() {
+  const card = document.getElementById('comparison-card');
+  const list = document.getElementById('comparison-list');
+  if (!distScale && !sizeScale) { card.classList.remove('show'); return; }
+
+  const items = [];
+  if (distScale) {
+    const neptuneM = (4.498e9 * distScale) * 1000;
+    items.push('🟦 從太陽走到 <strong>海王星</strong>:' + describeDistance(neptuneM));
+    const proximaM = (4.0114e13 * distScale) * 1000;
+    items.push('✦ 從太陽走到 <strong>比鄰星(最近恆星)</strong>:' + describeDistance(proximaM));
+    const moonM = (3.844e5 * distScale) * 1000;
+    items.push('🌙 <strong>地月距離</strong>:' + describeDistance(moonM));
+  }
+  if (sizeScale) {
+    const moonD_mm = (3475 * sizeScale) * 1e6;
+    items.push('🌑 <strong>月球直徑</strong>:約 ' + fmtModel(moonD_mm) + ' mm');
+    const sunD_cm = (1392700 * sizeScale) * 1e5;
+    items.push('☀️ <strong>太陽直徑</strong>:約 ' + fmtModel(sunD_cm) + ' cm ' + describeObject(sunD_cm));
+  }
+  list.innerHTML = items.map(i => '<li>' + i + '</li>').join('');
+  card.classList.add('show');
+}
+
+function describeDistance(meters) {
+  if (meters < 0.01) return '<span class="num">' + fmtModel(meters*1000) + ' mm</span>(差不多一根頭髮粗)';
+  if (meters < 1) return '<span class="num">' + fmtModel(meters*100) + ' cm</span>';
+  if (meters < 10) return '<span class="num">' + fmtModel(meters) + ' m</span>(教室內可放下)';
+  if (meters < 100) return '<span class="num">' + fmtModel(meters) + ' m</span>(教室到操場)';
+  if (meters < 500) return '<span class="num">' + fmtModel(meters) + ' m</span>(操場範圍)';
+  if (meters < 5000) return '<span class="num">' + fmtModel(meters) + ' m</span>(約 ' + (meters/400).toFixed(1) + ' 圈操場)';
+  if (meters < 100000) return '<span class="num">' + (meters/1000).toFixed(2) + ' km</span>';
+  if (meters < 1e7) return '<span class="num">' + (meters/1000).toFixed(0) + ' km</span>(約 ' + (meters/300000).toFixed(0) + ' 倍台北到高雄)';
+  return '<span class="num">' + (meters/1000).toExponential(2) + ' km</span>';
+}
+
+function describeObject(cm) {
+  if (cm < 0.1) return '(看不見的小點)';
+  if (cm < 1) return '(芝麻、米粒)';
+  if (cm < 3) return '(彈珠)';
+  if (cm < 6) return '(乒乓球、橘子)';
+  if (cm < 10) return '(網球、棒球)';
+  if (cm < 15) return '(柚子、小西瓜)';
+  if (cm < 25) return '(籃球)';
+  if (cm < 50) return '(健身瑜伽球)';
+  if (cm < 100) return '(一個小朋友)';
+  if (cm < 300) return '(教室高度)';
+  return '(房屋大小以上)';
+}
+
+function setMode(newMode) {
+  mode = newMode;
+  document.querySelectorAll('[data-mode]').forEach(btn => {
+    btn.classList.toggle('primary', btn.dataset.mode === mode);
+  });
+  if (mode === 'unified') {
+    if (lastEditedInput) {
+      const col = lastEditedInput.dataset.col;
+      if (col === 'size' && sizeScale) distScale = sizeScale;
+      else if (col === 'dist' && distScale) sizeScale = distScale;
+    } else if (sizeScale && !distScale) distScale = sizeScale;
+    else if (distScale && !sizeScale) sizeScale = distScale;
+    else if (sizeScale && distScale) distScale = sizeScale;
+  }
+  recomputeAll(null);
+  updateScaleDisplay();
+  updateComparison();
+}
+
+function applyPreset(preset) {
+  document.querySelectorAll('#bodies-tbody input').forEach(i => { i.value = ''; i.classList.remove('dim'); });
+  document.querySelectorAll('#bodies-tbody select').forEach(s => { s.dataset.userSet = 'false'; });
+  sizeScale = null;
+  distScale = null;
+
+  if (preset === 'reset') {
+    updateScaleDisplay();
+    document.getElementById('comparison-card').classList.remove('show');
+    return;
+  }
+
+  let targetInput, value, unit;
+  if (preset === 'basketball')  { targetInput = findInput('sun', 'size');   value = 24;  unit = 'cm'; setMode('unified'); }
+  else if (preset === 'soccer') { targetInput = findInput('sun', 'size');   value = 22;  unit = 'cm'; setMode('unified'); }
+  else if (preset === 'orange') { targetInput = findInput('sun', 'size');   value = 8;   unit = 'cm'; setMode('unified'); }
+  else if (preset === 'meter')  { targetInput = findInput('sun', 'size');   value = 1;   unit = 'm';  setMode('unified'); }
+  else if (preset === 'papertape') {
+    setMode('split');
+    targetInput = findInput('pluto', 'dist'); value = 1; unit = 'm';
+  }
+  else if (preset === 'walkjupiter') {
+    setMode('split');
+    targetInput = findInput('jupiter', 'dist'); value = 70; unit = 'm';
+  }
+  else if (preset === 'campus130') {
+    // 校園 130 m = 太陽到海王星(冥王星 2006 降為矮行星,以海王星當外界)
+    setMode('split');
+    targetInput = findInput('neptune', 'dist'); value = 130; unit = 'm';
+  }
+  else if (preset === 'campus130uni') {
+    // 校園 130 m = 太陽到海王星 + 統一比例(太陽 ≈ 4 cm)
+    setMode('unified');
+    targetInput = findInput('neptune', 'dist'); value = 130; unit = 'm';
+  }
+  else return;
+
+  if (targetInput) {
+    const sel = targetInput.parentElement.querySelector('select');
+    sel.value = unit;
+    sel.dataset.userSet = 'true';
+    targetInput.value = value;
+    targetInput.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+}
+
+function findInput(bodyKey, col) {
+  return document.querySelector('#bodies-tbody input[data-body-key="' + bodyKey + '"][data-col="' + col + '"]');
+}
+
+document.querySelectorAll('[data-mode]').forEach(btn => {
+  btn.addEventListener('click', () => setMode(btn.dataset.mode));
+});
+document.querySelectorAll('[data-preset]').forEach(btn => {
+  btn.addEventListener('click', () => applyPreset(btn.dataset.preset));
+});
+
+renderTable();
+updateScaleDisplay();
+applyPreset('basketball');
+</script>
+</body>
+</html>
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       

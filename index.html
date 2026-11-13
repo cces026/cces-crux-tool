@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0b1530">
+<title>互動教室 — 車城國小 南十字天文台</title>
+<meta name="description" content="車城國小南十字天文台（IAU P38）自製的天文互動教學工具：太陽系、月相、潮汐、太陽軌跡、比例尺。免安裝，打開就能用。">
+<style>
+:root{--bg:#0b1530;--card:#13214a;--card2:#1a2b5c;--line:#2a3d74;--tx:#eef2ff;--tx2:#a9b4d6;--gold:#ffd166;--blue:#7cc4ff}
+*{box-sizing:border-box}
+html{background:#0b1530}
+body{margin:0;background:radial-gradient(1200px 600px at 70% -10%,#1b2f6b 0,var(--bg) 60%) fixed;color:var(--tx);font-family:"Noto Sans TC","Microsoft JhengHei","PingFang TC",sans-serif;line-height:1.6}
+a{color:var(--blue)}
+header{max-width:1080px;margin:0 auto;padding:40px 20px 16px}
+.kicker{color:var(--gold);font-weight:700;letter-spacing:.08em;font-size:14px}
+h1{font-size:clamp(28px,5vw,44px);margin:6px 0 8px}
+.lead{color:var(--tx2);max-width:680px;margin:0}
+.links{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}
+.links a{display:inline-block;padding:8px 14px;border:1px solid var(--line);border-radius:999px;text-decoration:none;color:var(--tx);background:rgba(255,255,255,.03);font-size:14px}
+.links a:hover{border-color:var(--gold)}
+main{max-width:1080px;margin:0 auto;padding:12px 20px 40px}
+h2{font-size:20px;margin:28px 0 12px;color:var(--gold)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
+.card{background:linear-gradient(180deg,var(--card2),var(--card));border:1px solid var(--line);border-radius:16px;padding:18px;display:flex;flex-direction:column;gap:8px}
+.card .ico{font-size:34px;line-height:1}
+.card h3{margin:0;font-size:20px}
+.card p{margin:0;color:var(--tx2);font-size:15px}
+.tags{display:flex;flex-wrap:wrap;gap:6px}
+.tag{font-size:12px;padding:2px 8px;border-radius:6px;background:rgba(124,196,255,.12);color:var(--blue)}
+.tag.big{background:rgba(255,209,102,.12);color:var(--gold)}
+.btn{margin-top:auto;align-self:flex-start;display:inline-block;padding:9px 18px;border-radius:10px;background:var(--gold);color:#1a1300;font-weight:700;text-decoration:none}
+.btn:hover{filter:brightness(1.08)}
+footer{max-width:1080px;margin:0 auto;padding:24px 20px 48px;color:var(--tx2);font-size:13px;border-top:1px solid var(--line)}
+</style>
+</head>
+<body>
+<header>
+  <div class="kicker">車城國小 南十字天文台 · IAU P38</div>
+  <h1>天文互動教室</h1>
+  <p class="lead">我們在車城上天文課時自己做的互動工具。不用安裝、不用登入，手機、平板、電腦打開就能用。歡迎老師帶回課堂使用。</p>
+  <div class="links">
+    <a href="https://cces026.github.io/cces-crux-weather/">🌤 車城即時氣象站</a>
+    <a href="credits.html">📜 素材出處與授權</a>
+  </div>
+</header>
+<main>
+  <h2>🪐 太陽系</h2>
+  <div class="grid">
+    <div class="card">
+      <div class="ico">🪐</div>
+      <h3>太陽系模擬器</h3>
+      <p>3D 太陽系，行星位置依真實日期計算。可以一路縮小，看到小行星帶、歐特雲、附近的恆星、銀河系和其他星系。</p>
+      <div class="tags"><span class="tag">國小高年級</span><span class="tag">國中</span><span class="tag">一般民眾</span><span class="tag big">檔案較大，建議 Wi-Fi</span></div>
+      <a class="btn" href="tools/solar-system/" target="_blank" rel="noopener">開啟工具</a>
+    </div>
+    <div class="card">
+      <div class="ico">📏</div>
+      <h3>太陽系比例尺換算器</h3>
+      <p>把太陽系縮小到校園的大小：如果太陽是一顆球，地球要放多遠？適合在操場排出行星距離。</p>
+      <div class="tags"><span class="tag">國小低年級起</span><span class="tag">戶外活動</span></div>
+      <a class="btn" href="tools/solar-scale/" target="_blank" rel="noopener">開啟工具</a>
+    </div>
+  </div>
+
+  <h2>🌍 地球與月亮</h2>
+  <div class="grid">
+    <div class="card">
+      <div class="ico">🌓</div>
+      <h3>月相模擬器</h3>
+      <p>月亮為什麼會有圓缺？從太空和從車城地面兩個角度，同時看月亮、地球、太陽的相對位置。</p>
+      <div class="tags"><span class="tag">國小中年級</span><span class="tag">國小高年級</span><span class="tag">一般民眾</span><span class="tag big">檔案較大，建議 Wi-Fi</span></div>
+      <a class="btn" href="tools/moon-phase/" target="_blank" rel="noopener">開啟工具</a>
+    </div>
+    <div class="card">
+      <div class="ico">🌊</div>
+      <h3>潮汐模擬器</h3>
+      <p>月球的引力怎麼讓海水鼓起兩個「潮汐隆起」？大潮、小潮又是怎麼來的？</p>
+      <div class="tags"><span class="tag">國小高年級</span><span class="tag">國中</span></div>
+      <a class="btn" href="tools/tides/" target="_blank" rel="noopener">開啟工具</a>
+    </div>
+    <div class="card">
+      <div class="ico">☀️</div>
+      <h3>天球太陽軌跡</h3>
+      <p>一年四季，太陽在天空走的路線有什麼不同？夏天為什麼比較熱、白天比較長？</p>
+      <div class="tags"><span class="tag">國小三年級起</span><span class="tag">國中</span></div>
+      <a class="btn" href="tools/sun-path/" target="_blank" rel="noopener">開啟工具</a>
+    </div>
+  </div>
+</main>
+<footer>
+  © 車城國小 南十字天文台 · 工具內容以 <a href="https://creativecommons.org/licenses/by-sa/4.0/deed.zh-hant">CC BY-SA 4.0</a> 釋出，使用的星表、影像與程式庫出處見 <a href="credits.html">素材出處與授權</a>。
+</footer>
+</body>
+</html>

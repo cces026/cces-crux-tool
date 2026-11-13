@@ -1,0 +1,351 @@
+<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>潮汐模擬器</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap">
+<style>
+  /* Layout: night-sky stage (canvas) left, lesson panel right; stacks on phones. Single dark look for classroom projection. */
+  :root {
+    --bg: #0b1226; --panel: #141d3a; --panel2: #1b2650; --line: #2c3a6b;
+    --ink: #eef1f7; --soft: #a9b4cc; --gold: #f2b544; --sky: #7fb2ff; --red: #ff7a5c; --sea: #3d8bff;
+    --f-body: "Noto Sans TC", "Microsoft JhengHei", "PingFang TC", sans-serif;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 16px; line-height: 1.6;
+    padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 14px; }
+  .app { max-width: 1280px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 16px; min-height: calc(100% - 4px); }
+  header { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 16px; }
+  h1 { margin: 0; font-size: clamp(22px, 3vw, 30px); font-weight: 900; letter-spacing: .04em; text-wrap: balance; }
+  header p { margin: 0; color: var(--soft); font-size: 14px; }
+  .stage { position: relative; background: radial-gradient(ellipse at 40% 50%, #142048 0%, var(--bg) 70%); border: 1px solid var(--line); border-radius: 14px; min-height: 420px; overflow: hidden; }
+  canvas#sky { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .tag { position: absolute; left: 12px; bottom: 10px; font-size: 12px; color: var(--soft); background: rgba(11,18,38,.7); padding: 2px 8px; border-radius: 6px; }
+  .side { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; }
+  .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .steps button { font: inherit; font-size: 14px; font-weight: 700; color: var(--soft); background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 8px 4px; cursor: pointer; line-height: 1.3; }
+  .steps button span { display: block; font-size: 12px; font-weight: 500; }
+  .steps button[aria-pressed="true"] { color: #10172e; background: var(--gold); border-color: var(--gold); }
+  .steps button:focus-visible, .seg button:focus-visible, .btn:focus-visible, input:focus-visible { outline: 3px solid var(--sky); outline-offset: 2px; }
+  .explain h2 { margin: 0 0 4px; font-size: 19px; color: var(--gold); }
+  .explain p { margin: 0; color: var(--ink); }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 8px; font-size: 13px; color: var(--soft); }
+  .legend i { display: inline-block; width: 18px; height: 4px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
+  .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+  .lab { font-size: 13px; color: var(--soft); min-width: 4.5em; }
+  .seg { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+  .seg button { font: inherit; font-size: 13px; color: var(--ink); background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 4px 10px; cursor: pointer; }
+  .seg button[aria-pressed="true"] { background: var(--sky); color: #0b1226; border-color: var(--sky); font-weight: 700; }
+  input[type=range] { flex: 1; min-width: 120px; accent-color: var(--gold); }
+  .val { font-variant-numeric: tabular-nums; min-width: 3.5em; text-align: right; color: var(--gold); font-weight: 700; }
+  .btn { font: inherit; font-weight: 700; font-size: 14px; color: #0b1226; background: var(--sky); border: 0; border-radius: 10px; padding: 7px 14px; cursor: pointer; }
+  .readout { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .readout div { background: var(--panel2); border-radius: 10px; padding: 8px 10px; }
+  .readout b { display: block; font-size: 22px; color: var(--gold); font-variant-numeric: tabular-nums; line-height: 1.2; }
+  .readout small { color: var(--soft); font-size: 12px; }
+  canvas#graph { width: 100%; height: 120px; display: block; }
+  .note { font-size: 12px; color: var(--soft); margin: 6px 0 0; }
+  .chip { display: inline-block; font-size: 13px; font-weight: 700; padding: 2px 10px; border-radius: 999px; background: var(--panel2); border: 1px solid var(--line); }
+  .chip.big { color: #10172e; background: var(--gold); border-color: var(--gold); }
+  @media (max-width: 860px) { .app { grid-template-columns: minmax(0, 1fr); } .stage { min-height: 360px; } }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style></head><body>
+
+<div class="app">
+  <header>
+    <h1>潮汐模擬器</h1>
+    <p>月球怎麼讓海水鼓起兩個包？一步一步看。南十字天文台</p>
+  </header>
+
+  <div class="stage" id="stage">
+    <canvas id="sky" aria-label="地球、月球與太陽的潮汐示意圖"></canvas>
+    <div class="tag">示意圖：力的差距與鼓包都大幅放大，實際大洋鼓包不到 1 公尺</div>
+  </div>
+
+  <div class="side">
+    <div class="card">
+      <div class="steps" role="group" aria-label="步驟">
+        <button id="s1" data-step="1" aria-pressed="true">①<span>月球的拉力</span></button>
+        <button id="s2" data-step="2" aria-pressed="false">②<span>甩出去的力</span></button>
+        <button id="s3" data-step="3" aria-pressed="false">③<span>兩個加起來</span></button>
+        <button id="s4" data-step="4" aria-pressed="false">④<span>海水鼓起來</span></button>
+      </div>
+    </div>
+
+    <div class="card explain" aria-live="polite">
+      <h2 id="ex-h"></h2>
+      <p id="ex-p"></p>
+      <div class="legend" id="legend"></div>
+    </div>
+
+    <div class="card">
+      <div class="row" style="margin-bottom:8px">
+        <span class="lab">月球距離</span>
+        <input type="range" id="dist" min="1" max="2" step="0.05" value="1" aria-label="月球距離倍數">
+        <span class="val" id="distv">×1.0</span>
+      </div>
+      <div class="readout">
+        <div><b id="pullv">1.00</b><small>月球拉地球的力氣（距離²）</small></div>
+        <div><b id="tidev">1.00</b><small>潮汐的大小（距離³）</small></div>
+      </div>
+      <p class="note">把月球拉遠：拉力和潮汐都變小，但潮汐掉得更快。</p>
+    </div>
+
+    <div class="card">
+      <div class="row" style="margin-bottom:6px">
+        <span class="lab">太陽</span>
+        <div class="seg" role="group" aria-label="太陽位置">
+          <button id="sun0" data-sun="none" aria-pressed="true">不看</button>
+          <button id="sun1" data-sun="new" aria-pressed="false">新月</button>
+          <button id="sun2" data-sun="q1" aria-pressed="false">上弦</button>
+          <button id="sun3" data-sun="full" aria-pressed="false">滿月</button>
+          <button id="sun4" data-sun="q3" aria-pressed="false">下弦</button>
+        </div>
+      </div>
+      <div class="row"><span class="lab">結果</span><span class="chip" id="tidekind">只有月球</span></div>
+      <p class="note">太陽造成的潮汐約是月球的 0.46 倍（金色鼓包）。</p>
+    </div>
+
+    <div class="card">
+      <div class="row" style="justify-content:space-between;margin-bottom:6px">
+        <span class="lab">滿州的海邊：一天的水位</span>
+        <button class="btn" id="play">▶ 讓地球轉</button>
+      </div>
+      <canvas id="graph" aria-label="海邊水位隨時間變化的曲線"></canvas>
+      <p class="note" id="clock">地球自轉：0 小時</p>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const C = getComputedStyle(document.documentElement);
+  const col = n => C.getPropertyValue(n).trim();
+  const P = { ink: col('--ink'), soft: col('--soft'), gold: col('--gold'), sky: col('--sky'), red: col('--red'), sea: col('--sea'), line: col('--line'), panel2: col('--panel2') };
+
+  const state = { step: 1, dist: 1, sun: 'none', playing: false, t: 0, hist: [] };
+  const LUNAR_DAY = 24.84; // hours
+
+  const TEXT = {
+    1: ['① 月球的拉力：近大遠小', '月球拉著整顆地球。離月球越近，拉力越大：面向月球的海水被拉得最多，地心中等，背對月球的海水最少。', [['var(--sky)', '月球的拉力']]],
+    2: ['② 甩出去的力：每個地方都一樣', '地球和月球像兩個人手拉手轉圈，地球會被「往外甩」。這個甩出去的力，在地球每個地方都一樣大，方向都背對月球。', [['var(--sky)', '月球的拉力'], ['var(--red)', '甩出去的力']]],
+    3: ['③ 兩個力加起來', '面向月球：拉力比較大，海水往月球那邊跑。地心：剛好抵消。背對月球：甩出去的力比較大，海水往外跑。', [['var(--gold)', '加起來剩下的力']]],
+    4: ['④ 海水鼓起兩個包', '兩邊的海水都往外跑，海洋被拉成橄欖球形。地球自轉時，海邊轉進鼓包就漲潮，轉出鼓包就退潮。按「讓地球轉」看看滿州的水位。', [['var(--sea)', '海水'], ['var(--gold)', '太陽造成的鼓包']]],
+  };
+
+  const sky = document.getElementById('sky');
+  const g = document.getElementById('graph');
+  const ctx = sky.getContext('2d');
+  const gx = g.getContext('2d');
+
+  function fit(cv) {
+    const r = cv.getBoundingClientRect(), d = Math.min(window.devicePixelRatio || 1, 2);
+    cv.width = Math.max(1, Math.round(r.width * d)); cv.height = Math.max(1, Math.round(r.height * d));
+    return d;
+  }
+
+  // physics (exaggerated for visibility)
+  const E = 0.3;                   // how far the earth's edge is relative to the moon distance (exaggerated)
+  const pull = x => 1 / Math.pow(state.dist - x * E, 2);   // x: -1 far side, 0 centre, +1 near side
+  const P2 = c => (3 * c * c - 1) / 2;
+  function sunAngle() { return { none: null, new: 0, full: Math.PI, q1: Math.PI / 2, q3: -Math.PI / 2 }[state.sun]; }
+  const moonAmp = () => 1 / Math.pow(state.dist, 3);
+  const SUN_RATIO = 0.46;
+
+  function arrow(c, x1, y1, x2, y2, color, w) {
+    const dx = x2 - x1, dy = y2 - y1, L = Math.hypot(dx, dy);
+    if (L < 2) return;
+    const ux = dx / L, uy = dy / L, h = Math.min(14, L * .45) * (w / 4);
+    c.strokeStyle = color; c.fillStyle = color; c.lineWidth = w; c.lineCap = 'round';
+    c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2 - ux * h * .8, y2 - uy * h * .8); c.stroke();
+    c.beginPath(); c.moveTo(x2, y2); c.lineTo(x2 - ux * h - uy * h * .6, y2 - uy * h + ux * h * .6); c.lineTo(x2 - ux * h + uy * h * .6, y2 - uy * h - ux * h * .6); c.closePath(); c.fill();
+  }
+  function label(c, t, x, y, color, size, align) {
+    c.font = `700 ${size}px ${col('--f-body')}`; c.textAlign = align || 'center'; c.textBaseline = 'middle';
+    c.lineWidth = 4; c.strokeStyle = 'rgba(11,18,38,.85)'; c.strokeText(t, x, y); c.fillStyle = color; c.fillText(t, x, y);
+  }
+
+  let stars = [];
+  function draw() {
+    const d = fit(sky), W = sky.width, H = sky.height, s = d;
+    ctx.clearRect(0, 0, W, H);
+    if (!stars.length) for (let i = 0; i < 90; i++) stars.push([Math.random(), Math.random(), Math.random()]);
+    for (const [a, b, k] of stars) { ctx.fillStyle = `rgba(255,255,255,${0.15 + k * 0.35})`; ctx.fillRect(a * W, b * H, 1.3 * s, 1.3 * s); }
+
+    const narrow = W / s < 600;
+    const R = Math.min(W * (narrow ? .17 : .16), H * .26);
+    const ex = W * (narrow ? .36 : .34), ey = H * .5;
+    const moonX = Math.min(W - 40 * s, ex + R * 1.8 + (W * (narrow ? .42 : .5) - R * 1.8) * (state.dist - 1 + .55) / 1.55);
+    const mr = R * .27;
+
+    // sun
+    const sa = sunAngle();
+    if (sa !== null) {
+      const sx = ex + Math.cos(sa) * Math.min(W, H) * .44, sy = ey - Math.sin(sa) * H * .4;
+      const cx = Math.max(30 * s, Math.min(W - 30 * s, sx)), cy = Math.max(30 * s, Math.min(H - 30 * s, sy));
+      const grd = ctx.createRadialGradient(cx, cy, 2, cx, cy, 34 * s);
+      grd.addColorStop(0, '#fff3c4'); grd.addColorStop(.45, '#f7a531'); grd.addColorStop(1, 'rgba(247,165,49,0)');
+      ctx.fillStyle = grd; ctx.beginPath(); ctx.arc(cx, cy, 34 * s, 0, 7); ctx.fill();
+      label(ctx, '太陽（很遠）', Math.max(52 * s, Math.min(W - 52 * s, cx)), cy + 40 * s * (cy > H / 2 ? -1 : 1), P.gold, 13 * s);
+    }
+
+    // ocean
+    const showOcean = state.step === 4;
+    const k = R * .38;
+    if (showOcean) {
+      ctx.beginPath();
+      for (let i = 0; i <= 180; i++) {
+        const ph = i / 180 * Math.PI * 2;
+        let h = moonAmp() * P2(Math.cos(ph));
+        if (sa !== null) h += SUN_RATIO * P2(Math.cos(ph - sa));
+        const r = R * 1.06 + k * (h + .5) * .7;
+        const x = ex + Math.cos(ph) * r, y = ey - Math.sin(ph) * r;
+        i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+      }
+      ctx.closePath(); ctx.fillStyle = 'rgba(61,139,255,.45)'; ctx.fill(); ctx.strokeStyle = P.sky; ctx.lineWidth = 1.5 * s; ctx.stroke();
+      if (sa !== null) { // sun-only bulge outline
+        ctx.beginPath();
+        for (let i = 0; i <= 180; i++) {
+          const ph = i / 180 * Math.PI * 2, r = R * 1.06 + k * (SUN_RATIO * P2(Math.cos(ph - sa)) + .5) * .7;
+          const x = ex + Math.cos(ph) * r, y = ey - Math.sin(ph) * r; i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+        }
+        ctx.closePath(); ctx.setLineDash([6 * s, 5 * s]); ctx.strokeStyle = P.gold; ctx.lineWidth = 2 * s; ctx.stroke(); ctx.setLineDash([]);
+      }
+    } else {
+      ctx.beginPath(); ctx.arc(ex, ey, R * 1.08, 0, 7); ctx.fillStyle = 'rgba(61,139,255,.35)'; ctx.fill();
+    }
+
+    // earth (rotating)
+    const rot = state.t / LUNAR_DAY * Math.PI * 2;
+    ctx.save(); ctx.translate(ex, ey);
+    const eg = ctx.createRadialGradient(-R * .3, -R * .3, R * .1, 0, 0, R);
+    eg.addColorStop(0, '#4f9cff'); eg.addColorStop(1, '#1d4fa8');
+    ctx.fillStyle = eg; ctx.beginPath(); ctx.arc(0, 0, R, 0, 7); ctx.fill();
+    ctx.rotate(-rot);
+    ctx.fillStyle = '#3f9a5a';
+    [[.35, -.2, .32, .5], [-.4, .3, .28, .35], [-.1, -.55, .25, .18], [.15, .5, .2, .22]].forEach(([a, b, w, h]) => { ctx.beginPath(); ctx.ellipse(a * R, b * R, w * R, h * R, .4, 0, 7); ctx.fill(); });
+    ctx.restore();
+
+    // Manzhou marker on rotating earth (starts facing up)
+    const ma = Math.PI / 2 + rot;
+    const mx = ex + Math.cos(ma) * R, my = ey - Math.sin(ma) * R;
+    if (showOcean) {
+      ctx.fillStyle = P.ink; ctx.beginPath(); ctx.arc(mx, my, 5 * s, 0, 7); ctx.fill();
+      ctx.strokeStyle = '#0b1226'; ctx.lineWidth = 2 * s; ctx.stroke();
+      label(ctx, '滿州', ex + Math.cos(ma) * (R * 1.62), ey - Math.sin(ma) * (R * 1.62), P.ink, 13 * s);
+    }
+
+    // moon
+    const mg = ctx.createRadialGradient(moonX - mr * .3, ey - mr * .3, 1, moonX, ey, mr);
+    mg.addColorStop(0, '#e9e9e4'); mg.addColorStop(1, '#8d8d88');
+    ctx.fillStyle = mg; ctx.beginPath(); ctx.arc(moonX, ey, mr, 0, 7); ctx.fill();
+    label(ctx, '月球', moonX, ey + mr + 14 * s, P.soft, 13 * s);
+
+    // arrows at far / centre / near
+    if (state.step <= 3) {
+      const pts = [[-1, '背對月球'], [0, '地心'], [1, '面向月球']];
+      const unit = R * .4;
+      const base = pull(0);
+      pts.forEach(([x, name], i) => {
+        const px = ex + x * R, py = ey;
+        const f = pull(x) / base;          // relative pull
+        const yo = (i - 1) * 0;            // arrows stacked vertically per point
+        if (state.step === 1 || state.step === 2) {
+          arrow(ctx, px, py - 12 * s, px + f * unit, py - 12 * s, P.sky, 4.5 * s);
+        }
+        if (state.step === 2) {
+          arrow(ctx, px, py + 12 * s, px - unit, py + 12 * s, P.red, 4.5 * s);
+        }
+        if (state.step === 3) {
+          const net = (f - 1) * unit * 1.3;
+          if (Math.abs(net) > 3) arrow(ctx, px, py, px + net, py, P.gold, 6 * s);
+          else { ctx.fillStyle = P.gold; ctx.beginPath(); ctx.arc(px, py, 5 * s, 0, 7); ctx.fill(); label(ctx, '抵消', px, py - 18 * s, P.gold, 12 * s); }
+        }
+        ctx.fillStyle = P.ink; ctx.beginPath(); ctx.arc(px, py, 3.5 * s, 0, 7); ctx.fill();
+        label(ctx, name, px, py + (state.step === 2 ? 40 : 30) * s, P.ink, 13 * s);
+      });
+    }
+  }
+
+  // tide height at Manzhou marker for given time
+  function heightAt(t) {
+    const ma = Math.PI / 2 + t / LUNAR_DAY * Math.PI * 2;
+    let h = moonAmp() * P2(Math.cos(ma));
+    const sa = sunAngle();
+    if (sa !== null) h += SUN_RATIO * P2(Math.cos(ma - sa));
+    return h;
+  }
+
+  function drawGraph() {
+    const d = fit(g), W = g.width, H = g.height;
+    gx.clearRect(0, 0, W, H);
+    const pad = 8 * d, top = 8 * d, bot = H - 18 * d;
+    const yOf = h => top + (bot - top) * (1 - (h + 1.6) / 3.2);
+    gx.strokeStyle = P.line; gx.lineWidth = 1;
+    gx.beginPath(); gx.moveTo(pad, yOf(0)); gx.lineTo(W - pad, yOf(0)); gx.stroke();
+    // full-day reference curve
+    gx.strokeStyle = 'rgba(127,178,255,.35)'; gx.lineWidth = 1.5 * d; gx.beginPath();
+    for (let i = 0; i <= 200; i++) { const t = i / 200 * LUNAR_DAY, x = pad + (W - 2 * pad) * i / 200, y = yOf(heightAt(t)); i ? gx.lineTo(x, y) : gx.moveTo(x, y); }
+    gx.stroke();
+    // progress
+    const frac = (state.t % LUNAR_DAY) / LUNAR_DAY;
+    gx.strokeStyle = P.sky; gx.lineWidth = 3 * d; gx.beginPath();
+    const n = Math.round(200 * frac);
+    for (let i = 0; i <= n; i++) { const t = i / 200 * LUNAR_DAY, x = pad + (W - 2 * pad) * i / 200, y = yOf(heightAt(t)); i ? gx.lineTo(x, y) : gx.moveTo(x, y); }
+    gx.stroke();
+    const cx = pad + (W - 2 * pad) * frac, cy = yOf(heightAt(state.t % LUNAR_DAY));
+    gx.fillStyle = P.gold; gx.beginPath(); gx.arc(cx, cy, 5 * d, 0, 7); gx.fill();
+    gx.font = `${11 * d}px ${col('--f-body')}`; gx.fillStyle = P.soft; gx.textBaseline = 'alphabetic';
+    gx.textAlign = 'left'; gx.fillText('0 時', pad, H - 4 * d);
+    gx.textAlign = 'center'; gx.fillText('約 12 時 25 分', W / 2, H - 4 * d);
+    gx.textAlign = 'right'; gx.fillText('24 時 50 分', W - pad, H - 4 * d);
+    gx.textAlign = 'left'; gx.fillStyle = P.sky; gx.fillText('漲潮 ↑', pad, top + 10 * d);
+  }
+
+  function setText() {
+    const [h, p, lg] = TEXT[state.step];
+    document.getElementById('ex-h').textContent = h;
+    document.getElementById('ex-p').textContent = p;
+    document.getElementById('legend').innerHTML = lg.filter(([c, t]) => state.step !== 4 || t !== '太陽造成的鼓包' || state.sun !== 'none')
+      .map(([c, t]) => `<span><i style="background:${c}"></i>${t}</span>`).join('');
+    document.querySelectorAll('.steps button').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.step === state.step)));
+    document.querySelectorAll('.seg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.sun === state.sun)));
+    const kind = document.getElementById('tidekind');
+    const map = { none: ['只有月球', false], new: ['大潮：日、地、月排成一直線', true], full: ['大潮：日、地、月排成一直線', true], q1: ['小潮：太陽和月球成直角', false], q3: ['小潮：太陽和月球成直角', false] };
+    kind.textContent = map[state.sun][0]; kind.classList.toggle('big', map[state.sun][1]);
+    const dv = state.dist;
+    document.getElementById('distv').textContent = '×' + dv.toFixed(2).replace(/0$/, '');
+    document.getElementById('pullv').textContent = (1 / dv / dv).toFixed(2);
+    document.getElementById('tidev').textContent = (1 / dv / dv / dv).toFixed(2);
+  }
+
+  function render() { setText(); draw(); drawGraph(); }
+
+  document.querySelectorAll('.steps button').forEach(b => b.addEventListener('click', () => { state.step = +b.dataset.step; render(); }));
+  document.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => { state.sun = b.dataset.sun; if (state.sun !== 'none') state.step = 4; render(); }));
+  document.getElementById('dist').addEventListener('input', e => { state.dist = +e.target.value; render(); });
+
+  const playBtn = document.getElementById('play');
+  let last = 0;
+  function tick(ts) {
+    if (!state.playing) return;
+    const dt = last ? Math.min(0.05, (ts - last) / 1000) : 0; last = ts;
+    state.t += dt * 2.2; // ~11 s per lunar day
+    document.getElementById('clock').textContent = '地球自轉：' + (state.t % LUNAR_DAY).toFixed(1) + ' 小時（一圈約 24 小時 50 分，月亮每天晚約 50 分鐘回到同一個位置）';
+    draw(); drawGraph();
+    requestAnimationFrame(tick);
+  }
+  playBtn.addEventListener('click', () => {
+    state.playing = !state.playing;
+    playBtn.textContent = state.playing ? '❚❚ 暫停' : '▶ 讓地球轉';
+    if (state.playing) { state.step = 4; setText(); last = 0; requestAnimationFrame(tick); }
+  });
+
+  new ResizeObserver(() => { draw(); drawGraph(); }).observe(document.getElementById('stage'));
+  window.addEventListener('resize', () => { draw(); drawGraph(); });
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(render);
+  render();
+})();
+</script>
+</body></html>

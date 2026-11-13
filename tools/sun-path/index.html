@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>天球 — 太陽軌跡與日形跡模擬</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  background:#07101c;
+  font-family:'Arial','微軟正黑體',sans-serif;
+  color:#fff;
+  display:flex; flex-direction:column; align-items:center;
+  min-height:100vh; padding:14px 10px;
+  user-select:none;
+}
+h1 { font-size:1.35rem; color:#ffe080; letter-spacing:2px; margin-bottom:2px; }
+.sub { font-size:.78rem; color:#556688; margin-bottom:10px; }
+#wrap { position:relative; width:680px; max-width:100%; }
+canvas { width:100%; display:block; border-radius:14px; cursor:grab; }
+canvas:active { cursor:grabbing; }
+
+#info {
+  position:absolute; top:10px; right:10px;
+  background:rgba(4,9,22,.88);
+  border:1px solid #1e2d44;
+  border-radius:8px; padding:8px 13px;
+  font-size:.75rem; line-height:1.85;
+  pointer-events:none;
+}
+.lbl { color:#5577aa; } .val { color:#fff; font-weight:bold; margin-left:5px; }
+
+#hint {
+  position:absolute; bottom:10px; left:50%; transform:translateX(-50%);
+  background:rgba(4,9,22,.75); border-radius:6px; padding:3px 10px;
+  font-size:.72rem; color:#4466aa; pointer-events:none;
+  transition:opacity 1.2s;
+}
+
+#legend {
+  display:flex; gap:10px; margin-top:10px; flex-wrap:wrap; justify-content:center;
+}
+.leg {
+  display:flex; align-items:center; gap:6px; font-size:.8rem; cursor:pointer;
+  padding:4px 12px; border-radius:20px; border:1px solid rgba(255,255,255,.1);
+  transition:all .18s; opacity:.45;
+}
+.leg.on { opacity:1; background:rgba(255,255,255,.06); }
+.leg:hover { opacity:.8; }
+.dot { width:12px; height:12px; border-radius:50%; flex-shrink:0; }
+
+#ctrl {
+  display:flex; align-items:center; gap:12px;
+  margin-top:10px; flex-wrap:wrap; justify-content:center;
+}
+.btn {
+  background:#111c38; color:#99aacc; border:1px solid #223355;
+  border-radius:8px; padding:6px 18px; font-size:.82rem;
+  cursor:pointer; transition:background .18s;
+}
+.btn:hover { background:#1a2a50; }
+.btn.act { background:#883300; border-color:#ff6a00; color:#fff; }
+#pb { background:#ff8c00; color:#fff; border-color:#ff8c00; font-weight:bold; }
+#pb:hover { background:#ffa030; }
+label { font-size:.78rem; color:#7788aa; }
+input[type=range] { width:90px; accent-color:#ff8c00; cursor:pointer; vertical-align:middle; }
+.sep { color:#223355; }
+
+#sg-status {
+  margin-top:7px; font-size:.75rem; color:#ff9940;
+  min-height:18px; text-align:center;
+}
+</style>
+</head>
+<body>
+<h1>天球 — 太陽軌跡</h1>
+<p class="sub">台灣（北緯 25°）· 拖曳旋轉</p>
+
+<div id="wrap">
+  <canvas id="c"></canvas>
+  <div id="info">
+    <div><span class="lbl">季節</span><span class="val" id="is">—</span></div>
+    <div><span class="lbl">時刻</span><span class="val" id="it">—</span></div>
+    <div><span class="lbl">仰角</span><span class="val" id="ia">—</span></div>
+    <div><span class="lbl">方位</span><span class="val" id="iz">—</span></div>
+  </div>
+  <div id="hint">⟲ 拖曳旋轉天球</div>
+</div>
+
+<div id="legend">
+  <div class="leg on" data-i="0"><div class="dot" style="background:#FFD700"></div>夏至 06/21</div>
+  <div class="leg on" data-i="1"><div class="dot" style="background:#FF9A00"></div>春秋分 03/21</div>
+  <div class="leg on" data-i="2"><div class="dot" style="background:#FF4420"></div>冬至 12/21</div>
+</div>
+
+<div id="ctrl">
+  <button class="btn" id="pb">▶ 播放</button>
+  <span class="sep">|</span>
+  <button class="btn" id="sgb">☀ 日形跡光帶模擬</button>
+  <button class="btn" id="clb">清除軌跡</button>
+  <button class="btn" id="alb">全部顯示</button>
+  <span class="sep">|</span>
+  <label>速度 <input type="range" id="spd" min="1" max="8" value="3"></label>
+</div>
+<div id="sg-status"></div>
+
+<script>
+// ═══════════════════════════════════════════════════
+//  Setup
+// ═══════════════════════════════════════════════════
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
+const W=680, H=500; cv.width=W; cv.height=H;
+const CX=W*.5, CY=H*.54, R=W*.36;
+const LAT=25*Math.PI/180;
+
+const AZ_NAMES=['正北','北北東','東北','東北東','正東','東南東','東南','南南東',
+                 '正南','南南西','西南','西南西','正西','西北西','西北','北北西'];
+
+// ═══════════════════════════════════════════════════
+//  Math helpers
+// ═══════════════════════════════════════════════════
+function sunAltAz(decDeg, haDeg) {
+  const dec=decDeg*Math.PI/180, ha=haDeg*Math.PI/180;
+  const sa=Math.sin(LAT)*Math.sin(dec)+Math.cos(LAT)*Math.cos(dec)*Math.cos(ha);
+  const alt=Math.asin(Math.max(-1,Math.min(1,sa)));
+  const ca=(Math.sin(dec)-Math.sin(LAT)*sa)/(Math.cos(LAT)*Math.cos(alt)+1e-9);
+  let az=Math.acos(Math.max(-1,Math.min(1,ca)));
+  if(Math.sin(ha)>0) az=2*Math.PI-az;
+  return {alt,az};
+}
+
+function sph2xyz(alt,az) {
+  return [Math.sin(az)*Math.cos(alt), Math.sin(alt), Math.cos(az)*Math.cos(alt)];
+}
+
+let theta=0.38, phi=0.30;
+function project([x,y,z]) {
+  // rotate Y
+  let rx=x*Math.cos(theta)-z*Math.sin(theta);
+  let rz=x*Math.sin(theta)+z*Math.cos(theta);
+  // rotate X (elevation)
+  let ry=y*Math.cos(phi)+rz*Math.sin(phi);
+  rz=-y*Math.sin(phi)+rz*Math.cos(phi);
+  // perspective
+  const fov=2.4, d=fov-rz;
+  return {sx:CX+rx/d*R*fov, sy:CY-ry/d*R*fov, depth:rz, front:rz<0};
+}
+
+function haRise(decDeg) {
+  const cr=-Math.tan(LAT)*Math.tan(decDeg*Math.PI/180);
+  return Math.abs(cr)<=1 ? Math.acos(cr)*180/Math.PI : (cr<0?180:0);
+}
+
+function buildArcPts(decDeg) {
+  const hr=haRise(decDeg), pts=[];
+  for(let ha=-hr; ha<=hr; ha+=1.2) {
+    const {alt,az}=sunAltAz(decDeg,ha);
+    pts.push({p:sph2xyz(alt,az), alt:alt*180/Math.PI, az:az*180/Math.PI, ha, above:alt>=-0.003});
+  }
+  return pts;
+}
+
+// ═══════════════════════════════════════════════════
+//  Season data
+// ═══════════════════════════════════════════════════
+const SEASONS=[
+  {name:'夏至',   dec: 23.5, color:'#FFD700', rgb:'255,215,0',   lw:3.5},
+  {name:'春秋分', dec:  0.0, color:'#FF9A00', rgb:'255,154,0',   lw:2.5},
+  {name:'冬至',   dec:-23.5, color:'#FF4420', rgb:'255,68,32',    lw:3.2},
+];
+const arcPts = SEASONS.map(s=>buildArcPts(s.dec));
+let shown=[true,true,true], focus=0;
+
+// ═══════════════════════════════════════════════════
+//  State
+// ═══════════════════════════════════════════════════
+let playing=false, sgMode=false;
+let animHA=null, animDec=SEASONS[focus].dec;
+let sgDecDir=-1, sgLoops=0;          // for solargraphy accumulation
+let speed=3, lastT=null, rafId=null;
+
+// Trail: array of world-space [x,y,z] points
+// Each point also carries a 'dec' value for coloring
+const TRAIL_MAX = 60000;
+let trail=[];   // [{p:[x,y,z], dec}]
+
+function clearTrail() { trail=[]; }
+
+function pushTrail(p, dec) {
+  trail.push({p,dec});
+  if(trail.length>TRAIL_MAX) trail.splice(0, TRAIL_MAX*.1); // trim 10%
+}
+
+// ═══════════════════════════════════════════════════
+//  Ground plane (3D — rotates with sphere)
+// ═══════════════════════════════════════════════════
+function buildGroundPoly(N=72) {
+  const pts=[];
+  for(let i=0;i<=N;i++) pts.push(sph2xyz(-0.012, i/N*2*Math.PI));
+  return pts;
+}
+const GROUND_POLY=buildGroundPoly();
+
+function drawGround() {
+  const proj=GROUND_POLY.map(p=>project(p));
+  // Filled disk
+  ctx.beginPath();
+  proj.forEach((p,i)=>i===0?ctx.moveTo(p.sx,p.sy):ctx.lineTo(p.sx,p.sy));
+  ctx.closePath();
+  ctx.fillStyle='rgba(28,90,28,0.28)';
+  ctx.fill();
+  ctx.strokeStyle='rgba(70,200,80,0.50)';
+  ctx.lineWidth=1.5; ctx.stroke();
+
+  // Radial lines N/S/E/W on ground (compass cross)
+  const cen=project([0,-0.01,0]);
+  [[0,'rgba(100,200,255,0.3)'],[Math.PI*.5,'rgba(70,180,70,0.25)'],
+   [Math.PI,'rgba(255,220,100,0.3)'],[Math.PI*1.5,'rgba(70,180,70,0.25)']].forEach(([az,col])=>{
+    const edge=project(sph2xyz(-0.01,az));
+    ctx.beginPath(); ctx.moveTo(cen.sx,cen.sy); ctx.lineTo(edge.sx,edge.sy);
+    ctx.strokeStyle=col; ctx.lineWidth=1.2; ctx.stroke();
+  });
+  // Diagonal lines
+  [Math.PI*.25,Math.PI*.75,Math.PI*1.25,Math.PI*1.75].forEach(az=>{
+    const edge=project(sph2xyz(-0.01,az));
+    ctx.beginPath(); ctx.moveTo(cen.sx,cen.sy); ctx.lineTo(edge.sx,edge.sy);
+    ctx.strokeStyle='rgba(70,180,70,0.15)'; ctx.lineWidth=.8; ctx.stroke();
+  });
+}
+
+// ═══════════════════════════════════════════════════
+//  Dome wireframe
+// ═══════════════════════════════════════════════════
+function drawSphereLine(pts3d, alphaFront, alphaBack, dash=[]) {
+  const projs=pts3d.map(p=>project(p));
+  ctx.save(); ctx.setLineDash(dash);
+  let seg=[projs[0]], face=projs[0].front;
+  const flush=(f)=>{
+    ctx.beginPath();
+    seg.forEach((s,j)=>j===0?ctx.moveTo(s.sx,s.sy):ctx.lineTo(s.sx,s.sy));
+    ctx.strokeStyle=sgMode
+      ? `rgba(160,80,20,${f?alphaFront:alphaBack})`
+      : `rgba(100,160,255,${f?alphaFront:alphaBack})`;
+    ctx.stroke(); seg=[];
+  };
+  for(let i=1;i<projs.length;i++){
+    const pr=projs[i];
+    if(pr.front!==face){ flush(face); face=pr.front; }
+    seg.push(pr);
+  }
+  if(seg.length) flush(face);
+  ctx.restore();
+}
+
+function drawDome() {
+  ctx.lineWidth=.9;
+  [30,60].forEach(a=>{
+    const pts=[]; for(let az=0;az<=360;az+=3) pts.push(sph2xyz(a*Math.PI/180,az*Math.PI/180));
+    drawSphereLine(pts,.38,.1,[3,5]);
+  });
+  for(let az=0;az<360;az+=30){
+    const pts=[]; for(let a=-90;a<=90;a+=3) pts.push(sph2xyz(a*Math.PI/180,az*Math.PI/180));
+    drawSphereLine(pts,.22,.07,[4,7]);
+  }
+  ctx.lineWidth=1.1;
+  for(let az=0;az<360;az+=90){
+    const pts=[]; for(let a=-90;a<=90;a+=2) pts.push(sph2xyz(a*Math.PI/180,az*Math.PI/180));
+    drawSphereLine(pts,.42,.12);
+  }
+}
+
+// ═══════════════════════════════════════════════════
+//  Compass labels
+// ═══════════════════════════════════════════════════
+function drawCompass() {
+  const dirs=[{az:0,l:'北',c:sgMode?'#cc8844':'#7799ff'},
+               {az:Math.PI/2,l:'東',c:sgMode?'#996633':'#aaccff'},
+               {az:Math.PI,l:'南',c:sgMode?'#ffcc66':'#ffcc44'},
+               {az:Math.PI*1.5,l:'西',c:sgMode?'#996633':'#aaccff'}];
+  ctx.font='bold 13px Arial'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  dirs.forEach(({az,l,c})=>{
+    const pr=project(sph2xyz(0,az));
+    const dx=pr.sx-CX, dy=pr.sy-CY, len=Math.hypot(dx,dy)||1;
+    ctx.fillStyle=c; ctx.fillText(l,pr.sx+dx/len*20,pr.sy+dy/len*17);
+  });
+  const zen=project([0,1,0]);
+  ctx.font='11px Arial'; ctx.fillStyle='rgba(180,200,255,.65)';
+  ctx.fillText('天頂',zen.sx,zen.sy-13);
+  ctx.beginPath(); ctx.arc(zen.sx,zen.sy,3,0,Math.PI*2);
+  ctx.fillStyle='rgba(200,220,255,.6)'; ctx.fill();
+}
+
+// ═══════════════════════════════════════════════════
+//  Trail draw (batched by age for performance)
+// ═══════════════════════════════════════════════════
+function drawTrail() {
+  if(trail.length<2) return;
+  const N=trail.length;
+  const BATCHES=16;
+  const bsize=Math.ceil(N/BATCHES);
+
+  for(let b=0;b<BATCHES;b++){
+    const start=b*bsize, end=Math.min(N-1,(b+1)*bsize);
+    if(start>=N) break;
+    const t=(b+.5)/BATCHES; // 0=oldest, 1=newest
+
+    // Color: warm band based on declination of each segment
+    // average dec for batch
+    const midIdx=Math.floor((start+end)/2);
+    const midDec=trail[midIdx].dec;
+    const dt=(midDec+23.5)/47; // 0=winter,1=summer
+    const r=255, g=Math.round(60+170*dt), bl=Math.round(0+60*dt);
+
+    // Glow pass (thick, low alpha)
+    ctx.beginPath();
+    for(let i=start;i<=end;i++){
+      const pr=project(trail[i].p);
+      i===start?ctx.moveTo(pr.sx,pr.sy):ctx.lineTo(pr.sx,pr.sy);
+    }
+    const glowA = sgMode ? (.015+t*.04) : (.04+t*.18);
+    ctx.strokeStyle=`rgba(${r},${g},${bl},${glowA})`;
+    ctx.lineWidth=sgMode?8:7-t*3;
+    ctx.stroke();
+
+    // Core pass (thinner, higher alpha)
+    if(!sgMode || t>.3){
+      ctx.beginPath();
+      for(let i=start;i<=end;i++){
+        const pr=project(trail[i].p);
+        i===start?ctx.moveTo(pr.sx,pr.sy):ctx.lineTo(pr.sx,pr.sy);
+      }
+      const coreA = sgMode ? (.008+t*.025) : (.08+t*.55);
+      ctx.strokeStyle=`rgba(${r},${g},${bl},${coreA})`;
+      ctx.lineWidth=sgMode?3:3-t*1;
+      ctx.stroke();
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════
+//  Season arcs (dim guide lines)
+// ═══════════════════════════════════════════════════
+function drawSeasonArc(pts, season, isFocus) {
+  const {color,rgb,lw}=season;
+  const above=pts.filter(p=>p.above), below=pts.filter(p=>!p.above);
+
+  // Below horizon dashed
+  if(below.length>1){
+    ctx.save(); ctx.setLineDash([3,5]);
+    ctx.beginPath();
+    below.map(p=>project(p.p)).forEach((pr,i)=>i===0?ctx.moveTo(pr.sx,pr.sy):ctx.lineTo(pr.sx,pr.sy));
+    ctx.strokeStyle=color+'44'; ctx.lineWidth=1; ctx.stroke();
+    ctx.restore();
+  }
+  if(above.length<2) return;
+  const ap=above.map(p=>({...project(p.p),src:p}));
+
+  // Main arc glow
+  ctx.beginPath();
+  ap.forEach((p,i)=>i===0?ctx.moveTo(p.sx,p.sy):ctx.lineTo(p.sx,p.sy));
+  ctx.strokeStyle=`rgba(${rgb},.15)`; ctx.lineWidth=lw+10; ctx.stroke();
+  ctx.beginPath();
+  ap.forEach((p,i)=>i===0?ctx.moveTo(p.sx,p.sy):ctx.lineTo(p.sx,p.sy));
+  ctx.strokeStyle=`rgba(${rgb},.35)`; ctx.lineWidth=lw+3; ctx.stroke();
+  ctx.beginPath();
+  ap.forEach((p,i)=>i===0?ctx.moveTo(p.sx,p.sy):ctx.lineTo(p.sx,p.sy));
+  ctx.strokeStyle=color; ctx.lineWidth=lw; ctx.stroke();
+
+  // Rise/set dots
+  [ap[0],ap[ap.length-1]].forEach(p=>{
+    ctx.beginPath(); ctx.arc(p.sx,p.sy,5,0,Math.PI*2);
+    ctx.fillStyle=color; ctx.fill();
+    ctx.strokeStyle='#fff'; ctx.lineWidth=1.2; ctx.stroke();
+  });
+}
+
+// ═══════════════════════════════════════════════════
+//  Sun dot
+// ═══════════════════════════════════════════════════
+function drawSun() {
+  if(animHA===null) return;
+  const {alt,az}=sunAltAz(animDec,animHA);
+  if(alt<-0.003) return;
+  const p=sph2xyz(alt,az), pr=project(p);
+  const s=SEASONS[focus], {color,rgb}=s;
+
+  for(let r=32;r>=7;r-=3){
+    ctx.beginPath(); ctx.arc(pr.sx,pr.sy,r,0,Math.PI*2);
+    ctx.fillStyle=`rgba(${rgb},${.02+(32-r)*.005})`; ctx.fill();
+  }
+  ctx.beginPath(); ctx.arc(pr.sx,pr.sy,10,0,Math.PI*2);
+  ctx.fillStyle=color; ctx.fill();
+  ctx.strokeStyle='#fff'; ctx.lineWidth=1.5; ctx.stroke();
+
+  // Time badge
+  const hrs=12+animHA/15;
+  const h=Math.floor(((hrs%24)+24)%24), m=Math.floor((hrs%1)*60);
+  const ts=`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+  ctx.font='bold 11px Arial'; ctx.textAlign='center';
+  const tw=ctx.measureText(ts).width;
+  ctx.fillStyle='rgba(4,10,28,.9)';
+  ctx.beginPath(); ctx.roundRect(pr.sx-tw/2-6,pr.sy-30,tw+12,17,3); ctx.fill();
+  ctx.strokeStyle=color; ctx.lineWidth=1; ctx.stroke();
+  ctx.fillStyle=color; ctx.fillText(ts,pr.sx,pr.sy-18);
+
+  // Info panel
+  document.getElementById('is').textContent=s.name+(sgMode?` (偏移${(animDec-s.dec).toFixed(1)}°)`:'');
+  document.getElementById('it').textContent=ts;
+  document.getElementById('ia').textContent=(alt*180/Math.PI).toFixed(1)+'°';
+  document.getElementById('iz').textContent=AZ_NAMES[Math.round(az*180/Math.PI/22.5)%16]+' '+(az*180/Math.PI).toFixed(0)+'°';
+}
+
+// ═══════════════════════════════════════════════════
+//  Render
+// ═══════════════════════════════════════════════════
+function drawBg() {
+  const g=ctx.createRadialGradient(CX,CY-R*.5,20,CX,CY+R*.4,R*1.5);
+  if(sgMode){ g.addColorStop(0,'#120900'); g.addColorStop(1,'#04020b'); }
+  else       { g.addColorStop(0,'#0d1a3d'); g.addColorStop(1,'#04080f'); }
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+}
+
+function render() {
+  ctx.clearRect(0,0,W,H);
+  drawBg();
+  drawGround();      // 3D ground rotates with sphere
+  drawDome();
+  drawTrail();       // accumulated light trail
+  ctx.save();
+  if(sgMode) ctx.globalAlpha=.55;  // season arcs are dimmer in sg mode
+  SEASONS.forEach((s,i)=>{ if(shown[i]) drawSeasonArc(arcPts[i],s,i===focus); });
+  ctx.restore();
+  drawSun();
+  drawCompass();
+}
+
+// ═══════════════════════════════════════════════════
+//  Animation loop
+// ═══════════════════════════════════════════════════
+function tick(ts) {
+  if(!lastT) lastT=ts;
+  const dt=Math.min((ts-lastT)/1000,.05); lastT=ts;
+
+  const hr=haRise(animDec);
+  if(animHA===null) animHA=-hr+2;
+
+  const dha=speed*16*dt;
+  animHA+=dha;
+
+  // Record trail point
+  const {alt,az}=sunAltAz(animDec,animHA);
+  if(alt>=-0.003) pushTrail(sph2xyz(alt,az), animDec);
+
+  // Loop
+  if(animHA>hr) {
+    animHA=-hr;
+    if(sgMode) {
+      // Shift declination to simulate next week
+      sgLoops++;
+      animDec += sgDecDir * .7;  // ~0.7° per loop ≈ simulating days passing
+      if(animDec<=-23.5){ animDec=-23.5; sgDecDir=1; }
+      if(animDec>= 23.5){ animDec= 23.5; sgDecDir=-1; }
+      const pct=Math.round((sgLoops/67)*100); // ~67 loops = full half-year
+      const side=sgDecDir<0?'夏→冬':'冬→夏';
+      document.getElementById('sg-status').textContent=
+        `☀ 累積中… 赤緯 ${animDec.toFixed(1)}°  ${side}  (${Math.min(pct,100)}%)`;
+    }
+  }
+
+  render();
+  if(playing) rafId=requestAnimationFrame(tick);
+}
+
+function play()  { playing=true;  lastT=null; rafId=requestAnimationFrame(tick); document.getElementById('pb').textContent='⏸ 暫停'; }
+function pause() { playing=false; cancelAnimationFrame(rafId); document.getElementById('pb').textContent='▶ 播放'; }
+
+// ═══════════════════════════════════════════════════
+//  Drag rotation
+// ═══════════════════════════════════════════════════
+let drag=false, ox=0, oy=0, ot=0, op=0;
+const onDS=(x,y)=>{ drag=true; ox=x; oy=y; ot=theta; op=phi; document.getElementById('hint').style.opacity='0'; };
+const onDM=(x,y)=>{ if(!drag)return; theta=ot+(x-ox)*.007; phi=Math.max(-.05,Math.min(1.45,op+(y-oy)*.006)); if(!playing)render(); };
+const onDE=()=>drag=false;
+cv.addEventListener('mousedown',e=>onDS(e.clientX,e.clientY));
+window.addEventListener('mousemove',e=>onDM(e.clientX,e.clientY));
+window.addEventListener('mouseup',onDE);
+cv.addEventListener('touchstart',e=>{e.preventDefault();onDS(e.touches[0].clientX,e.touches[0].clientY);},{passive:false});
+window.addEventListener('touchmove',e=>{e.preventDefault();onDM(e.touches[0].clientX,e.touches[0].clientY);},{passive:false});
+window.addEventListener('touchend',onDE);
+
+// ═══════════════════════════════════════════════════
+//  UI
+// ═══════════════════════════════════════════════════
+document.getElementById('pb').addEventListener('click',()=>playing?pause():play());
+document.getElementById('spd').addEventListener('input',e=>speed=+e.target.value);
+
+document.getElementById('sgb').addEventListener('click',()=>{
+  sgMode=!sgMode;
+  document.getElementById('sgb').classList.toggle('act',sgMode);
+  document.getElementById('sgb').textContent=sgMode?'× 關閉光帶':'☀ 日形跡光帶模擬';
+  if(sgMode){
+    clearTrail(); sgLoops=0;
+    animDec=SEASONS[focus].dec; sgDecDir=-1;
+    document.getElementById('sg-status').textContent='☀ 光帶模擬啟動，請播放觀看積累…';
+  } else {
+    document.getElementById('sg-status').textContent='';
+  }
+  render();
+});
+
+document.getElementById('clb').addEventListener('click',()=>{
+  clearTrail(); sgLoops=0;
+  animDec=SEASONS[focus].dec; sgDecDir=-1;
+  document.getElementById('sg-status').textContent='';
+  render();
+});
+
+document.getElementById('alb').addEventListener('click',()=>{
+  shown=[true,true,true];
+  document.querySelectorAll('.leg').forEach(el=>el.classList.add('on'));
+  render();
+});
+
+document.querySelectorAll('.leg').forEach(el=>{
+  el.addEventListener('click',()=>{
+    const i=+el.dataset.i;
+    shown[i]=!shown[i]; el.classList.toggle('on',shown[i]);
+    focus=shown.lastIndexOf(true);
+    if(focus<0){ shown[0]=true; focus=0; document.querySelectorAll('.leg')[0].classList.add('on'); }
+    animDec=SEASONS[focus].dec;
+    clearTrail();
+    if(animHA!==null){ const hr=haRise(animDec); animHA=Math.max(-hr,Math.min(hr,animHA)); }
+    render();
+  });
+});
+
+// ═══════════════════════════════════════════════════
+//  Init
+// ═══════════════════════════════════════════════════
+animHA=-haRise(animDec)+3;
+render();
+setTimeout(()=>{ play(); }, 600);
+</script>
+</body>
+</html>
