@@ -1,0 +1,1081 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0e0e16">
+<title>互動式赫羅圖 — 接續 3D 模型版 — 南十字天文台</title>
+<style>
+  :root {
+    --bg: #0e0e16;
+    --panel: #1a1a25;
+    --panel-2: #232333;
+    --panel-3: #2d2d3f;
+    --border: #36364a;
+    --text: #ecedf5;
+    --text-2: #9a9ab0;
+    --text-3: #6b6b85;
+    --accent: #ffd966;
+    --accent-blue: #6cc1ff;
+    --accent-red: #ff7a7a;
+    --accent-green: #a3e4a3;
+    --grid-major: rgba(255, 217, 102, 0.30);
+    --grid-mid:   rgba(255, 217, 102, 0.14);
+    --grid-minor: rgba(255, 217, 102, 0.06);
+    --shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+
+    /* 光譜型對應顏色(跟前段 3D 工具一致) */
+    --sp-O: #6e9bff;
+    --sp-B: #9cc8ff;
+    --sp-A: #ffffff;
+    --sp-F: #fff8d6;
+    --sp-G: #ffe066;
+    --sp-K: #ffab5e;
+    --sp-M: #ff6a4d;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, "PingFang TC", "Microsoft JhengHei", "Noto Sans TC", system-ui, sans-serif; }
+  body { min-height: 100vh; padding: 20px; }
+  .app { max-width: 1320px; margin: 0 auto; display: grid; gap: 16px; }
+  header { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; }
+  header h1 { margin: 0; font-size: 22px; font-weight: 600; color: var(--accent); }
+  header .sub { color: var(--text-2); font-size: 13px; }
+
+  /* 上排提示條 — 接續前段 3D 模型用語 */
+  .bridge-banner {
+    background: linear-gradient(90deg, rgba(108, 193, 255, 0.10), rgba(255, 217, 102, 0.10));
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 13px;
+    color: var(--text-2);
+    line-height: 1.55;
+  }
+  .bridge-banner strong { color: var(--accent-blue); }
+  .bridge-banner .accent { color: var(--accent); }
+
+  .viz-row { display: grid; grid-template-columns: 1fr 320px; gap: 16px; align-items: stretch; }
+  @media (max-width: 980px) {
+    .viz-row { grid-template-columns: 1fr; }
+    .controls { order: 2; }
+    .stage-wrap { order: 1; }
+  }
+
+  .stage-wrap { background: var(--panel); border-radius: 14px; padding: 16px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .stage-head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+  .stage-head h2 { margin: 0; font-size: 16px; font-weight: 500; color: var(--text); }
+  .pill { padding: 4px 12px; border-radius: 999px; font-size: 12px; font-weight: 500; background: var(--panel-3); color: var(--text-2); }
+  .pill.live { background: rgba(255, 217, 102, 0.18); color: var(--accent); }
+
+  .stage { position: relative; width: 100%; background: radial-gradient(ellipse at center, #06060d 0%, #02020a 100%); border-radius: 10px; overflow: hidden; aspect-ratio: 11 / 7; }
+  .stage svg { display: block; width: 100%; height: 100%; }
+
+  /* 控制面板 */
+  .controls { background: var(--panel); border-radius: 14px; padding: 18px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 14px; }
+  .ctrl-block { background: var(--panel-2); border-radius: 10px; padding: 12px; }
+  .ctrl-block h3 { margin: 0 0 10px 0; font-size: 13px; color: var(--text-2); font-weight: 500; letter-spacing: 0.5px; }
+  select { width: 100%; background: var(--panel-3); color: var(--text); border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 12px; font-size: 14px; font-family: inherit; cursor: pointer; appearance: none;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path d='M3 4.5l3 3 3-3' stroke='%239a9ab0' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+    background-repeat: no-repeat; background-position: right 12px center; padding-right: 30px;
+  }
+  select:focus { outline: 1px solid var(--accent); border-color: var(--accent); }
+
+  .btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .btn { flex: 1 1 auto; background: var(--panel-3); color: var(--text); border: 1px solid var(--border); border-radius: 8px;
+    padding: 9px 12px; font-size: 13px; font-family: inherit; cursor: pointer; transition: all 0.15s; }
+  .btn:hover { background: #3a3a52; border-color: var(--accent); }
+  .btn.primary { background: rgba(255, 217, 102, 0.16); border-color: var(--accent); color: var(--accent); }
+  .btn.primary:hover { background: rgba(255, 217, 102, 0.28); }
+  .btn.danger { background: rgba(255, 122, 122, 0.10); border-color: var(--accent-red); color: var(--accent-red); }
+  .btn.danger:hover { background: rgba(255, 122, 122, 0.20); }
+  .btn.small { padding: 6px 10px; font-size: 12px; flex: 0 1 auto; }
+
+  /* 計數條 */
+  .counter { display: flex; align-items: baseline; justify-content: space-between; padding: 8px 12px;
+    background: var(--panel-3); border-radius: 8px; }
+  .counter .big { font-size: 22px; color: var(--accent); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .counter .small { font-size: 12px; color: var(--text-3); }
+  .progress { height: 4px; background: var(--panel-3); border-radius: 2px; overflow: hidden; }
+  .progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent-blue), var(--accent)); transition: width 0.4s; }
+
+  /* 星星詳細資料卡 */
+  .star-card { background: var(--panel-2); border-radius: 10px; padding: 14px; min-height: 120px; transition: opacity 0.25s; }
+  .star-card.empty { color: var(--text-3); font-size: 13px; text-align: center; padding: 30px 14px; }
+  .card-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+  .card-zh { font-size: 18px; color: var(--accent); font-weight: 600; }
+  .card-en { font-size: 12px; color: var(--text-3); font-family: ui-monospace, monospace; }
+  .card-row { display: flex; justify-content: space-between; font-size: 13px; padding: 5px 0; border-bottom: 1px dashed var(--border); }
+  .card-row:last-child { border-bottom: none; }
+  .card-row .k { color: var(--text-2); }
+  .card-row .v { color: var(--text); font-variant-numeric: tabular-nums; }
+  .card-row .v.hi { color: var(--accent); font-weight: 600; }
+  .card-consts { margin-top: 8px; font-size: 11px; color: var(--text-3); }
+  .card-consts span { display: inline-block; background: var(--panel-3); padding: 2px 7px; border-radius: 4px; margin-right: 4px; margin-top: 3px; color: var(--text-2); }
+
+  /* 「發現問題」提示區 — 課堂教學金句 */
+  .hints { background: linear-gradient(135deg, rgba(108, 193, 255, 0.10), rgba(163, 228, 163, 0.05));
+    border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; font-size: 12px; color: var(--text-2); line-height: 1.6; }
+  .hints h4 { margin: 0 0 6px 0; font-size: 12px; color: var(--accent-green); font-weight: 600; letter-spacing: 0.5px; }
+  .hints ul { margin: 0; padding-left: 18px; }
+  .hints li { margin-bottom: 4px; }
+
+  /* SVG 內部 */
+  .axis-line { stroke: var(--text-3); stroke-width: 1.2; }
+  .grid-line { stroke: var(--grid-major); stroke-width: 0.5; stroke-dasharray: 3,3; opacity: 0.7; }
+  .axis-label { fill: var(--text-2); font-size: 12px; font-family: inherit; }
+  .axis-title { fill: var(--text-2); font-size: 13px; font-weight: 500; font-family: inherit; }
+  .zone-bg { opacity: 0; transition: opacity 0.5s; pointer-events: none; }
+  .zone-bg.on { opacity: 0.15; }
+  .zone-label { fill: var(--text); font-size: 14px; font-weight: 600; opacity: 0; transition: opacity 0.5s; pointer-events: none; letter-spacing: 1px; }
+  .zone-label.on { opacity: 0.85; }
+
+  .star-dot {
+    cursor: pointer;
+    transition: r 0.2s, stroke-width 0.2s;
+  }
+  .star-dot:hover { stroke: #fff; stroke-width: 2; }
+  .star-dot.selected { stroke: var(--accent); stroke-width: 2.5; }
+  .star-dot.flash { animation: flash 0.6s ease-out; }
+  @keyframes flash {
+    0% { r: 18; opacity: 0.8; stroke: var(--accent); stroke-width: 3; }
+    100% { r: var(--base-r, 6); opacity: 1; stroke-width: 0; }
+  }
+
+  /* 太陽特殊高亮 */
+  .sun-marker { animation: sunPulse 2.5s ease-in-out infinite; }
+  @keyframes sunPulse {
+    0%, 100% { opacity: 0.5; r: 12; }
+    50% { opacity: 1; r: 16; }
+  }
+
+  /* Tooltip */
+  .tt { position: fixed; pointer-events: none; background: rgba(0,0,0,0.92); border: 1px solid var(--accent); color: #fff;
+    padding: 6px 10px; border-radius: 6px; font-size: 12px; z-index: 100; opacity: 0; transition: opacity 0.15s;
+    transform: translate(-50%, -130%); white-space: nowrap; }
+  .tt.on { opacity: 1; }
+  .tt .en { display: block; font-size: 10px; color: var(--text-3); font-family: ui-monospace, monospace; margin-top: 2px; }
+
+  footer { text-align: center; padding: 14px 0 4px; color: var(--text-3); font-size: 11px; }
+</style>
+<script src="./stars.js"></script>
+</head>
+<body>
+
+<div id="tooltip" class="tt"><div id="tt-name"></div><div id="tt-en" class="en"></div></div>
+
+<div class="app">
+  <header>
+    <h1>互動式赫羅圖 — 接續 3D 模型版</h1>
+    <span class="sub">把 3D 工具裡的星「丟」過來這張平面圖,看看會發現什麼</span>
+  </header>
+
+  <div class="bridge-banner">
+    剛才在 <strong>3D 模型</strong>裡,我們看到星星散在<strong>立體空間</strong>裡,大小會隨「視/絕對星等」改變。<br>
+    現在把 X 軸換成<span class="accent">顏色(光譜型)</span>、Y 軸換成<span class="accent">絕對星等</span>,把那些星<strong>逐顆丟過來</strong> — 它們會在這張圖上自己「排隊」。
+  </div>
+
+  <div class="viz-row">
+    <!-- 左:HR 圖 -->
+    <div class="stage-wrap">
+      <div class="stage-head">
+        <h2>赫羅圖 — 顏色 vs 絕對星等</h2>
+        <span class="pill" id="pill-info">點下方「丟一個星座」開始</span>
+      </div>
+      <div class="stage">
+        <svg id="hr-svg" viewBox="0 0 1100 700" preserveAspectRatio="xMidYMid meet">
+          <defs>
+            <!-- 三大分區的色塊(預設隱藏) -->
+            <linearGradient id="ms-grad" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="#a3e4a3"/>
+              <stop offset="100%" stop-color="#4a8a4a"/>
+            </linearGradient>
+            <radialGradient id="sg-grad">
+              <stop offset="0%" stop-color="#ff7a7a"/>
+              <stop offset="100%" stop-color="#a04040"/>
+            </radialGradient>
+            <radialGradient id="rg-grad">
+              <stop offset="0%" stop-color="#ffab5e"/>
+              <stop offset="100%" stop-color="#a06030"/>
+            </radialGradient>
+
+            <!-- 飛入動畫的路徑(JS 動態用) -->
+            <filter id="glow"><feGaussianBlur stdDeviation="2"/></filter>
+          </defs>
+
+          <!-- 背景星空(裝飾) -->
+          <g id="bg-stars"></g>
+
+          <!-- 三大分區 + 白矮星區(預設隱藏,可 toggle)— JS 會根據 Y 軸範圍動態定位 -->
+          <g id="zones"></g>
+
+          <!-- 標準 HR 圖背景疊層(可 toggle)— JS 繪製 -->
+          <g id="reference-bg" opacity="0"></g>
+
+          <!-- 太陽一生軌跡(可 toggle)— JS 繪製 -->
+          <g id="sun-track" opacity="0"></g>
+
+          <!-- 網格線 -->
+          <g id="grid"></g>
+
+          <!-- 座標軸 -->
+          <line x1="80" y1="620" x2="1040" y2="620" class="axis-line"/>
+          <line x1="80" y1="60" x2="80" y2="620" class="axis-line"/>
+
+          <!-- X 軸刻度(光譜型) -->
+          <g id="x-ticks"></g>
+
+          <!-- X 軸顏色帶 -->
+          <g id="color-strip"></g>
+
+          <!-- Y 軸刻度(絕對星等) -->
+          <g id="y-ticks"></g>
+
+          <!-- 軸標題 -->
+          <text x="560" y="685" class="axis-title" text-anchor="middle">B-V 色指數 / 光譜型 — 左熱右冷</text>
+          <text x="25" y="340" class="axis-title" text-anchor="middle" transform="rotate(-90 25 340)">絕對星等 M — 越上越亮</text>
+
+          <!-- 星星圖層 -->
+          <g id="star-layer"></g>
+
+          <!-- 太陽永久標示 -->
+          <g id="sun-group">
+            <circle class="sun-marker" id="sun-halo" cx="0" cy="0" r="12" fill="none" stroke="#ffd966" stroke-width="2" opacity="0.6"/>
+            <circle id="sun-dot" cx="0" cy="0" r="5" fill="#ffd966" stroke="#fff" stroke-width="1.5"/>
+            <text id="sun-label" x="0" y="0" fill="#ffd966" font-size="13" font-weight="600" text-anchor="middle">☀ 太陽 (M=+4.83)</text>
+          </g>
+        </svg>
+      </div>
+    </div>
+
+    <!-- 右:控制面板 -->
+    <div class="controls">
+
+      <div class="ctrl-block">
+        <h3>① 選一個星座「丟」過去</h3>
+        <select id="const-select">
+          <option value="">— 選擇星座 —</option>
+        </select>
+        <div style="margin-top: 10px;">
+          <button class="btn primary" id="btn-drop" style="width:100%">▶ 丟這個星座</button>
+        </div>
+      </div>
+
+      <div class="ctrl-block">
+        <h3>② 批次操作</h3>
+        <div class="btn-row">
+          <button class="btn" id="btn-all">🌌 一鍵全丟(剩餘)</button>
+        </div>
+        <div class="btn-row" style="margin-top: 6px;">
+          <button class="btn danger" id="btn-clear">⟲ 一鍵清空</button>
+        </div>
+      </div>
+
+      <div class="counter">
+        <div>
+          <div class="big"><span id="cnt-now">0</span> <span class="small">/ <span id="cnt-total">0</span> 顆</span></div>
+          <div class="small" id="cnt-label">還沒開始</div>
+        </div>
+      </div>
+      <div class="progress"><div class="progress-fill" id="progress" style="width: 0%"></div></div>
+
+      <div class="ctrl-block">
+        <h3>③ 看分區(讓三大居民區浮現)</h3>
+        <div class="btn-row">
+          <button class="btn small" data-zone="ms">主序帶</button>
+          <button class="btn small" data-zone="sg">超巨星帶</button>
+          <button class="btn small" data-zone="rg">紅巨星區</button>
+          <button class="btn small" data-zone="wd">白矮星區</button>
+        </div>
+      </div>
+
+      <div class="ctrl-block">
+        <h3>④ 看完整真相</h3>
+        <button class="btn" id="btn-ref" style="width:100%">⊙ 對比「標準 HR 圖」</button>
+        <div style="font-size:11px;color:var(--text-3);margin-top:6px;line-height:1.5">
+          疊上主序帶完整曲線 + 框出「肉眼可見區」,看星其實只佔哪一塊
+        </div>
+      </div>
+
+      <div class="ctrl-block">
+        <h3>⑤ 篩選演化階段</h3>
+        <div class="btn-row">
+          <button class="btn small filter-btn primary" data-lum="all">全部</button>
+          <button class="btn small filter-btn" data-lum="main_sequence">主序星</button>
+          <button class="btn small filter-btn" data-lum="giant">巨星</button>
+          <button class="btn small filter-btn" data-lum="supergiant">超巨星</button>
+        </div>
+        <div class="btn-row" style="margin-top:6px;">
+          <button class="btn small filter-btn" data-lum="subgiant">次巨星</button>
+          <button class="btn small filter-btn" data-lum="bright_giant">亮巨星</button>
+          <button class="btn small filter-btn" data-lum="white_dwarf">白矮星</button>
+        </div>
+        <div style="font-size:11px;color:var(--text-3);margin-top:6px;line-height:1.5">
+          只顯示某類星,其他變淡 — 看主序帶/巨星區分布最直觀
+        </div>
+      </div>
+
+      <div class="ctrl-block">
+        <h3>⑥ 太陽的一生</h3>
+        <button class="btn" id="btn-suntrack" style="width:100%">☀ 太陽一生軌跡</button>
+        <div style="font-size:11px;color:var(--text-3);margin-top:6px;line-height:1.5">
+          從原恆星 → 現在 → 紅巨星 → 行星狀星雲 → 白矮星,在 HR 圖上的演化路徑
+        </div>
+      </div>
+
+      <div class="star-card empty" id="star-card">點圖上任一顆星看詳細資料</div>
+
+      <div class="hints">
+        <h4>💡 課堂可問</h4>
+        <ul>
+          <li>放了 5-10 顆後問:「有沒有看到星星好像沿某條線排?」</li>
+          <li>全丟之後問:「咦,太陽好像在最下面?是太陽很弱嗎?」</li>
+          <li>丟「鄰近星」之後看:右下角出現紅矮星、左下出現白矮星</li>
+          <li>按「⊙ 對比標準 HR 圖」:「我們夜空中看到的星,其實只佔宇宙的一角」</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <footer>南十字天文台 · 接續「星座視差視覺化 v8」的同批星 · 2026-05</footer>
+</div>
+
+<script>
+// ============ 資料 ============
+// 從共用資料夾載入(若 window.STARS_CONSTELLATIONS 未定義,代表 stars.js 沒載到)
+if (!window.STARS_CONSTELLATIONS) {
+  alert('⚠️ 找不到星表資料\n\n請確認以下檔案存在:\n天文/05_觀測_工具與軟體/星表資料/stars.js\n\n相對路徑應為:../../../05_觀測_工具與軟體/星表資料/stars.js');
+  throw new Error('STARS data not loaded');
+}
+// 用原 STARS_CONSTELLATIONS 的中文星名建 lookup (覆蓋 88 版的 Bayer 名)
+const CHINESE_NAMES = {};
+if (window.STARS_CONSTELLATIONS) {
+  for (const s of window.STARS_CONSTELLATIONS) {
+    // 用 RA/Dec 近似 match (88 版來自不同來源,精確度可能略異)
+    const key = `${s.ra.toFixed(1)},${s.dec.toFixed(1)}`;
+    CHINESE_NAMES[key] = s.zh;
+  }
+}
+// 也建立「英文名 base」→ 中文 lookup (處理 "Vega (α Lyr)" → "Vega")
+const CHINESE_BY_EN = {};
+if (window.STARS_CONSTELLATIONS) {
+  for (const s of window.STARS_CONSTELLATIONS) {
+    const enBase = s.en.split(/\s*\(/)[0].trim();
+    if (enBase) CHINESE_BY_EN[enBase] = s.zh;
+  }
+}
+
+// 處理 88 版:用中文名覆蓋
+const STARS_88_LOCAL = (window.STARS_88 || []).map(s => {
+  let zh = s.zh;
+  const key = `${s.ra.toFixed(1)},${s.dec.toFixed(1)}`;
+  if (CHINESE_NAMES[key]) {
+    zh = CHINESE_NAMES[key];
+  } else {
+    const enBase = (s.en || '').split(/\s*\(/)[0].trim();
+    if (CHINESE_BY_EN[enBase]) zh = CHINESE_BY_EN[enBase];
+  }
+  return { ...s, zh, consts: s.consts || [s.con.toLowerCase()] };
+});
+
+// 建立 88 版的星座清單(優先;附中文「座」字)
+const CONS_88 = (window.STARS_88_LIST || []).map(c => ({
+  id: c.id, zh: c.zh, group: c.group + (c.count ? ` (${c.count}顆)` : '')
+}));
+
+const DATA = {
+  stars: [...STARS_88_LOCAL, ...window.STARS_NEARBY],
+  consts: [
+    {id:'nearby', zh:'★ 鄰近星(紅矮+白矮)', group:'跨星座 ★'},
+    ...CONS_88
+  ]
+};
+
+// 88 IAU 三字母縮寫 → 視差工具 19 版 id 對照(用於「主要星」模式)
+// 視差工具裡每個星座有定義「學生指認用的幾顆主要星」(5-11 顆,構成星座輪廓)
+// 點星座按鈕時優先用這個版本,沒有對應的星座才退回 88 版全收
+const CONST_19_MAP = {
+  'ori': 'orion', 'uma': 'ursamajor', 'cru': 'crux', 'cen': 'centaurus',
+  'cas': 'cassiopeia', 'leo': 'leo', 'boo': 'bootes', 'vir': 'virgo',
+  'lyr': 'lyra', 'aql': 'aquila', 'cyg': 'cygnus', 'sco': 'scorpius',
+  'peg': 'pegasus', 'tau': 'taurus', 'gem': 'gemini', 'cma': 'canismajor',
+};
+
+// 把 STARS_CONSTELLATIONS 也加進 DATA.stars,作為「主要星 lookup」資料源
+// (這些星可能跟 88 版有重複,但因為位置一樣,視覺上只是一個點)
+if (window.STARS_CONSTELLATIONS) {
+  DATA.stars = [...DATA.stars, ...window.STARS_CONSTELLATIONS];
+}
+
+// 加跨星座群到下拉清單(春季三角、夏季大三角、冬季六邊形)
+const CROSS_GROUPS = [
+  {id: 'spring_triangle', zh: '春季三角', group: '跨星座群 ★'},
+  {id: 'summer_triangle', zh: '夏季大三角', group: '跨星座群 ★'},
+  {id: 'winter_hexagon', zh: '冬季大六邊形', group: '跨星座群 ★'},
+];
+DATA.consts = [...CROSS_GROUPS, ...DATA.consts];
+
+
+// ============ SVG 座標映射 ============
+// X 軸:B-V 色指數連續軸,從 -0.4 (熱/藍) 到 +2.5 (冷/紅)
+// 跟標準 HR 圖完全一致,每顆星依 ci 落點,主序帶就是連續斜帶
+const CI_MIN = -0.4, CI_MAX = 2.5;
+const X_LEFT = 100, X_RIGHT = 1020;
+function ciToX(ci) { return X_LEFT + (ci - CI_MIN) / (CI_MAX - CI_MIN) * (X_RIGHT - X_LEFT); }
+
+// 光譜型 → 該型 B-V 中位數(用於沒 ci 的星備援、X 軸標籤位置)
+const SP_CI_MEDIAN = { O: -0.32, B: -0.16, A: 0.0, F: 0.45, G: 0.7, K: 1.15, M: 1.7 };
+const SP_COLORS = { O: '#6e9bff', B: '#9cc8ff', A: '#ffffff', F: '#fff8d6', G: '#ffe066', K: '#ffab5e', M: '#ff6a4d' };
+const SP_LABELS = ['O','B','A','F','G','K','M'];
+
+// SP_X_BASE 仍提供給「分區色塊/對比圖」等舊程式用 — 改成由 ci 中位數計算
+const SP_X_BASE = Object.fromEntries(SP_LABELS.map(sp => [sp, ciToX(SP_CI_MEDIAN[sp])]));
+
+// 從光譜型推估 ci(只在 ci 缺資料時用)
+function specToCi(spec) { return SP_CI_MEDIAN[spec] !== undefined ? SP_CI_MEDIAN[spec] : 0.5; }
+
+// Y 軸:絕對星等 M,範圍 -9(亮)到 +6(暗),映射到 y=60..620
+const Y_TOP = 60, Y_BOTTOM = 640, M_MAX = -10, M_MIN = 17;
+function magToY(M) { return Y_TOP + (M - M_MAX) / (M_MIN - M_MAX) * (Y_BOTTOM - Y_TOP); }
+
+// 太陽絕對星等
+const SUN_M = 4.83;
+const SUN_X = ciToX(0.65);  // 太陽 G2V,B-V = 0.65
+const SUN_Y = magToY(SUN_M);
+
+// 光度型(luminosity class)解析
+const LUM_CN = {
+  supergiant:   { zh: '超巨星',   en: 'Supergiant',   color: '#ff7a7a' },
+  bright_giant: { zh: '亮巨星',   en: 'Bright Giant', color: '#ffab5e' },
+  giant:        { zh: '巨星',     en: 'Giant',        color: '#ffd966' },
+  subgiant:     { zh: '次巨星',   en: 'Subgiant',     color: '#ffe066' },
+  main_sequence:{ zh: '主序星',   en: 'Main Sequence',color: '#a3e4a3' },
+  subdwarf:     { zh: '次矮星',   en: 'Subdwarf',     color: '#6cc1ff' },
+  white_dwarf:  { zh: '白矮星',   en: 'White Dwarf',  color: '#9cc8ff' },
+  unknown:      { zh: '未分類',   en: 'Unknown',      color: '#9a9ab0' },
+};
+
+function getLumClass(star) {
+  if (star.isWD) return 'white_dwarf';
+  const raw = (star.spect_raw || '').trim();
+  if (/^D/.test(raw)) return 'white_dwarf';
+
+  // 一致性檢查:spect_raw 第一字母是否跟修正後的 spec 一致
+  // 若不一致(spec 已被 ci 修正),代表 HYG spect 字串可能有問題,不採用其光度型
+  const rawFirst = raw.replace(/^[a-z]+/, '').charAt(0).toUpperCase();
+  const consistent = rawFirst === star.spec;
+
+  if (consistent) {
+    const m = raw.match(/[OBAFGKM][0-9.]*\s*(Ia\+|Iab|Ia|Ib|III|II|IV|VII|VI|Ve|V)(?![IV])/);
+    if (m) {
+      const c = m[1];
+      if (c === 'Ia+' || c === 'Iab' || c === 'Ia' || c === 'Ib') return 'supergiant';
+      if (c === 'II') return 'bright_giant';
+      if (c === 'III') return 'giant';
+      if (c === 'IV') return 'subgiant';
+      if (c === 'V' || c === 'Ve') return 'main_sequence';
+      if (c === 'VI' || c === 'VII') return 'subdwarf';
+    }
+  }
+
+  // Fallback (spect 字串不可信或無光度型) — 用 M+spec 推估
+  const M = star.M, sp = star.spec;
+  // 各光譜型主序帶 M 範圍(寬鬆值,涵蓋次型)
+  const MS_RANGE = {
+    O: [-6, -1], B: [-4, 1.5], A: [-1, 3], F: [1.5, 5],
+    G: [3, 7], K: [5, 9.5], M: [8, 17],
+  };
+  // 1. 極亮 → 超巨星
+  if (M < -5) return 'supergiant';
+  // 2. 巨星區(光譜偏冷且 M 偏亮)
+  if (M < -1 && (sp === 'K' || sp === 'M' || sp === 'G')) return 'giant';
+  if (M < -3 && (sp === 'A' || sp === 'F' || sp === 'B')) return 'bright_giant';
+  if (M < -1 && (sp === 'A' || sp === 'F')) return 'giant';
+  // 3. 主序帶範圍命中 → 主序星
+  const r = MS_RANGE[sp];
+  if (r && M >= r[0] && M <= r[1]) return 'main_sequence';
+  // 4. 次巨星(主序到巨星的過渡)
+  if (M < (r ? r[0] : 0)) return 'subgiant';
+  return 'unknown';
+}
+
+// 確定的(deterministic)jitter — 讓每顆星每次都在同樣位置
+function jitter(seed, range) {
+  // 簡單 hash
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = ((h << 5) - h + seed.charCodeAt(i)) | 0;
+  return ((Math.abs(h) % 1000) / 1000 - 0.5) * 2 * range;
+}
+
+// ============ 初始化 ============
+const svg = document.getElementById('hr-svg');
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+// 背景星空裝飾
+(function bgStars() {
+  const g = document.getElementById('bg-stars');
+  for (let i = 0; i < 100; i++) {
+    const c = document.createElementNS(SVG_NS, 'circle');
+    c.setAttribute('cx', Math.random() * 1100);
+    c.setAttribute('cy', Math.random() * 700);
+    c.setAttribute('r', Math.random() * 1.2 + 0.3);
+    c.setAttribute('fill', '#ffffff');
+    c.setAttribute('opacity', Math.random() * 0.4 + 0.05);
+    g.appendChild(c);
+  }
+})();
+
+// 網格
+(function grid() {
+  const g = document.getElementById('grid');
+  // 水平線(每 2 個星等)
+  for (let M = -10; M <= 16; M += 2) {
+    const y = magToY(M);
+    if (y < Y_TOP || y > Y_BOTTOM) continue;
+    const line = document.createElementNS(SVG_NS, 'line');
+    line.setAttribute('x1', 80); line.setAttribute('x2', 1040);
+    line.setAttribute('y1', y); line.setAttribute('y2', y);
+    line.setAttribute('class', 'grid-line');
+    g.appendChild(line);
+  }
+})();
+
+// X 軸刻度(光譜型 + 顏色帶)
+(function xAxis() {
+  const ticks = document.getElementById('x-ticks');
+  const strip = document.getElementById('color-strip');
+
+  // 顏色色帶:從藍到紅,連續漸層(用 SVG gradient)
+  const defs = document.querySelector('#hr-svg defs');
+  defs.insertAdjacentHTML('beforeend', `
+    <linearGradient id="ci-gradient" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#6e9bff"/>
+      <stop offset="${100*((SP_CI_MEDIAN.B-CI_MIN)/(CI_MAX-CI_MIN))}%" stop-color="#9cc8ff"/>
+      <stop offset="${100*((SP_CI_MEDIAN.A-CI_MIN)/(CI_MAX-CI_MIN))}%" stop-color="#ffffff"/>
+      <stop offset="${100*((SP_CI_MEDIAN.F-CI_MIN)/(CI_MAX-CI_MIN))}%" stop-color="#fff8d6"/>
+      <stop offset="${100*((SP_CI_MEDIAN.G-CI_MIN)/(CI_MAX-CI_MIN))}%" stop-color="#ffe066"/>
+      <stop offset="${100*((SP_CI_MEDIAN.K-CI_MIN)/(CI_MAX-CI_MIN))}%" stop-color="#ffab5e"/>
+      <stop offset="100%" stop-color="#ff6a4d"/>
+    </linearGradient>`);
+  const r = document.createElementNS(SVG_NS, 'rect');
+  r.setAttribute('x', X_LEFT); r.setAttribute('y', 622);
+  r.setAttribute('width', X_RIGHT - X_LEFT); r.setAttribute('height', 5);
+  r.setAttribute('fill', 'url(#ci-gradient)');
+  r.setAttribute('rx', 2.5);
+  strip.appendChild(r);
+
+  // 光譜型字母標籤,放在該型 ci 中位數位置
+  SP_LABELS.forEach(sp => {
+    const x = ciToX(SP_CI_MEDIAN[sp]);
+    const t = document.createElementNS(SVG_NS, 'text');
+    t.setAttribute('x', x); t.setAttribute('y', 645);
+    t.setAttribute('class', 'axis-label');
+    t.setAttribute('text-anchor', 'middle');
+    t.textContent = sp;
+    ticks.appendChild(t);
+  });
+
+  // 加幾個 B-V 數值刻度(下方)
+  [0.0, 0.5, 1.0, 1.5, 2.0].forEach(v => {
+    const x = ciToX(v);
+    const t = document.createElementNS(SVG_NS, 'text');
+    t.setAttribute('x', x); t.setAttribute('y', 663);
+    t.setAttribute('class', 'axis-label');
+    t.setAttribute('text-anchor', 'middle');
+    t.setAttribute('style', 'font-size: 10px; opacity: 0.6;');
+    t.textContent = (v >= 0 ? '+' : '') + v.toFixed(1);
+    ticks.appendChild(t);
+  });
+})();
+
+// Y 軸刻度(絕對星等)
+(function yAxis() {
+  const ticks = document.getElementById('y-ticks');
+  for (let M = -10; M <= 16; M += 2) {
+    const y = magToY(M);
+    if (y < Y_TOP || y > Y_BOTTOM) continue;
+    const t = document.createElementNS(SVG_NS, 'text');
+    t.setAttribute('x', 70); t.setAttribute('y', y + 4);
+    t.setAttribute('class', 'axis-label');
+    t.setAttribute('text-anchor', 'end');
+    t.textContent = (M >= 0 ? '+' : '') + M;
+    ticks.appendChild(t);
+  }
+})();
+
+// 太陽定位
+(function placeSun() {
+  document.getElementById('sun-halo').setAttribute('cx', SUN_X);
+  document.getElementById('sun-halo').setAttribute('cy', SUN_Y);
+  document.getElementById('sun-dot').setAttribute('cx', SUN_X);
+  document.getElementById('sun-dot').setAttribute('cy', SUN_Y);
+  const sl = document.getElementById('sun-label');
+  sl.setAttribute('x', SUN_X);
+  sl.setAttribute('y', SUN_Y + 28);
+})();
+
+
+// ============ 動態繪製分區色塊 + 標準 HR 圖背景 ============
+(function drawZones() {
+  const zg = document.getElementById('zones');
+  const absY = (a, b) => Math.abs(magToY(a) - magToY(b)) / 2;
+  const midY = (a, b) => (magToY(a) + magToY(b)) / 2;
+  const midX = (sp1, sp2) => (SP_X_BASE[sp1] + SP_X_BASE[sp2]) / 2;
+
+  // 主序帶:從 (O區左, M=-5) 斜到 (M區右, M=+15)的平行四邊形,寬約 3 星等
+  const ms_pts = [
+    [SP_X_BASE.O - 70, magToY(-5)],
+    [SP_X_BASE.O - 70, magToY(-2.5)],
+    [SP_X_BASE.M + 40, magToY(+16)],
+    [SP_X_BASE.M + 40, magToY(+13.5)],
+  ].map(p => p.join(',')).join(' ');
+  zg.insertAdjacentHTML('beforeend',
+    `<polygon class="zone-bg" id="zone-ms" points="${ms_pts}" fill="url(#ms-grad)"/>`);
+
+  // 超巨星帶:頂部水平窄條 (M=-8 ± 1.5)
+  zg.insertAdjacentHTML('beforeend',
+    `<ellipse class="zone-bg" id="zone-sg" cx="${midX('B','K')}" cy="${magToY(-7)}" rx="450" ry="${absY(-9, -5)}" fill="url(#sg-grad)"/>`);
+
+  // 紅巨星區:G/K/M 區,M=-3~+1
+  zg.insertAdjacentHTML('beforeend',
+    `<ellipse class="zone-bg" id="zone-rg" cx="${midX('G','M')+30}" cy="${magToY(-1)}" rx="200" ry="${absY(-3, +2)}" fill="url(#rg-grad)"/>`);
+
+  // 白矮星區:B/A/F 區,M=+10~+14(這是「視覺色看起來像」的白矮星位置)
+  zg.insertAdjacentHTML('beforeend',
+    `<ellipse class="zone-bg" id="zone-wd" cx="${midX('B','F')}" cy="${magToY(+12)}" rx="220" ry="${absY(+10, +14.5)}" fill="#d0d0e0"/>`);
+
+  // 標籤
+  zg.insertAdjacentHTML('beforeend',
+    `<text class="zone-label" id="zone-ms-l" x="${SP_X_BASE.G - 20}" y="${magToY(+7)}" text-anchor="middle">主序帶 V</text>`);
+  zg.insertAdjacentHTML('beforeend',
+    `<text class="zone-label" id="zone-sg-l" x="${midX('B','K')}" y="${magToY(-7)+5}" text-anchor="middle">超巨星帶 Ia/Ib</text>`);
+  zg.insertAdjacentHTML('beforeend',
+    `<text class="zone-label" id="zone-rg-l" x="${midX('G','M')+30}" y="${magToY(-1)+5}" text-anchor="middle">紅巨星區 III</text>`);
+  zg.insertAdjacentHTML('beforeend',
+    `<text class="zone-label" id="zone-wd-l" x="${midX('B','F')}" y="${magToY(+12)+5}" text-anchor="middle">白矮星區</text>`);
+})();
+
+// 標準 HR 圖背景:簡化只留 V 形主序帶曲線 + 金色框
+(function drawReference() {
+  const rg = document.getElementById('reference-bg');
+
+  // 標準主序帶 V 形雲(用 path 畫一條從左上斜到右下的彎曲帶)
+  const ms_path = `
+    M ${SP_X_BASE.O - 70} ${magToY(-7)}
+    Q ${SP_X_BASE.A + 30} ${magToY(-1.5)}, ${SP_X_BASE.G} ${magToY(+5)}
+    T ${SP_X_BASE.M + 40} ${magToY(+16)}
+    L ${SP_X_BASE.M + 70} ${magToY(+16)}
+    Q ${SP_X_BASE.K + 30} ${magToY(+5)}, ${SP_X_BASE.A + 60} ${magToY(-0.5)}
+    T ${SP_X_BASE.O - 30} ${magToY(-6)}
+    Z`;
+  rg.insertAdjacentHTML('beforeend',
+    `<path d="${ms_path}" fill="#ffffff" opacity="0.12"/>`);
+  rg.insertAdjacentHTML('beforeend',
+    `<text x="${SP_X_BASE.K + 50}" y="${magToY(+8)}" fill="#fff" opacity="0.6" font-size="13" font-style="italic">標準 HR 圖主序帶 V 形</text>`);
+
+  // 金色框標示「肉眼可見的星實際分布範圍」
+  // 包含我們 120 顆星座星 + 26 顆鄰近星的合理範圍
+  const fx = SP_X_BASE.O - 70, fy = magToY(-9);
+  const fw = SP_X_BASE.M - SP_X_BASE.O + 140;
+  const fh = magToY(+5) - magToY(-9);
+  rg.insertAdjacentHTML('beforeend',
+    `<rect x="${fx}" y="${fy}" width="${fw}" height="${fh}" fill="none" stroke="#ffd966" stroke-width="2" stroke-dasharray="6,4" opacity="0.75"/>`);
+  rg.insertAdjacentHTML('beforeend',
+    `<text x="${fx + 12}" y="${fy + 20}" fill="#ffd966" font-size="13" font-weight="600" opacity="0.95">← 肉眼可見的星只佔這一塊</text>`);
+  rg.insertAdjacentHTML('beforeend',
+    `<text x="${fx + 12}" y="${fy + fh - 8}" fill="#ffd966" font-size="11" opacity="0.85">(下半部紅矮星和白矮星 → 全部肉眼看不見)</text>`);
+})();
+
+// 太陽一生軌跡(1 太陽質量恆星演化,簡化教學版 — 單向路徑,省略 RGB/HB/AGB 繞圈)
+(function drawSunTrack() {
+  const tg = document.getElementById('sun-track');
+
+  // 9 個關鍵點 [B-V, 絕對星等 M, 名稱, 註解]
+  // 簡化原則:單向移動,不畫水平支來回;標籤清楚說明「不是巨星」
+  const stages = [
+    { ci: 1.4,  M: +1.5,  name: '① 原恆星',     desc: '塌縮中的星雲,大而冷;尚未點燃核融合' },
+    { ci: 1.0,  M: +4.0,  name: '② 主序前',     desc: '沿 Hayashi 軌跡收縮,亮度下降' },
+    { ci: 0.65, M: +4.83, name: '★ 現在',       desc: '46 億歲,穩定燒氫,還會再穩定 50 億年', current: true },
+    { ci: 0.85, M: +3.5,  name: '③ 次巨星',     desc: '核心氫耗盡,殼層燒氫' },
+    { ci: 1.5,  M: -0.5,  name: '④ 紅巨星',     desc: '體積膨脹 200 倍,吞掉水星金星' },
+    { ci: 1.55, M: -3.0,  name: '⑤ 紅巨星頂',   desc: '最亮階段,直徑可達地球軌道' },
+    { ci: 0.0,  M: -1.0,  name: '⑥ 行星狀星雲', desc: '外殼吹散,暴露 1 萬度核心(不是巨星,是裸核)' },
+    { ci: 0.0,  M: +11.0, name: '⑦ 白矮星',     desc: '塌縮成地球大小,密度極高,慢慢冷卻' },
+    { ci: 0.7,  M: +14.5, name: '⑧ 黑矮星',     desc: '冷成黑;理論上要幾千億年(宇宙還不夠老)' },
+  ];
+
+  const pts = stages.map(s => ({ ...s, x: ciToX(s.ci), y: magToY(s.M) }));
+
+  function smoothPath(pts) {
+    if (pts.length < 2) return '';
+    let d = `M ${pts[0].x} ${pts[0].y}`;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const p0 = pts[i-1] || pts[i];
+      const p1 = pts[i], p2 = pts[i+1];
+      const p3 = pts[i+2] || p2;
+      const c1x = p1.x + (p2.x - p0.x) / 6;
+      const c1y = p1.y + (p2.y - p0.y) / 6;
+      const c2x = p2.x - (p3.x - p1.x) / 6;
+      const c2y = p2.y - (p3.y - p1.y) / 6;
+      d += ` C ${c1x} ${c1y}, ${c2x} ${c2y}, ${p2.x} ${p2.y}`;
+    }
+    return d;
+  }
+
+  // 主軌跡:從 ① 原恆星 經主序 到 ⑤ 紅巨星頂(實線金黃,代表燃料燃燒中)
+  const mainTrack = pts.slice(0, 6);
+  tg.insertAdjacentHTML('beforeend',
+    `<path d="${smoothPath(mainTrack)}" fill="none" stroke="#ffd966" stroke-width="3" opacity="0.85" stroke-linecap="round"/>`);
+
+  // ⑤ 紅巨星頂 → ⑥ 行星狀星雲(紅虛線:外殼劇變)
+  tg.insertAdjacentHTML('beforeend',
+    `<path d="M ${pts[5].x} ${pts[5].y} L ${pts[6].x} ${pts[6].y}" fill="none" stroke="#ff7a7a" stroke-width="2" stroke-dasharray="5,4" opacity="0.75"/>`);
+
+  // ⑥ 行星狀星雲 → ⑦ 白矮星(藍虛線:塌縮)
+  tg.insertAdjacentHTML('beforeend',
+    `<path d="M ${pts[6].x} ${pts[6].y} L ${pts[7].x} ${pts[7].y}" fill="none" stroke="#9cc8ff" stroke-width="2" stroke-dasharray="3,4" opacity="0.7"/>`);
+
+  // ⑦ 白矮星 → ⑧ 黑矮星(灰虛線:慢慢冷卻)
+  tg.insertAdjacentHTML('beforeend',
+    `<path d="M ${pts[7].x} ${pts[7].y} L ${pts[8].x} ${pts[8].y}" fill="none" stroke="#6b6b85" stroke-width="2" stroke-dasharray="2,5" opacity="0.55"/>`);
+
+  // 各階段標示點 + 文字
+  pts.forEach((p, i) => {
+    const isCurrent = p.current;
+    const r = isCurrent ? 9 : 5;
+    const fill = isCurrent ? '#ffd966' : '#ffffff';
+    const stroke = isCurrent ? '#fff' : '#ffd966';
+    tg.insertAdjacentHTML('beforeend',
+      `<circle cx="${p.x}" cy="${p.y}" r="${r}" fill="${fill}" stroke="${stroke}" stroke-width="2" opacity="0.95"/>`);
+
+    // 文字位置:第 3 點(現在)放下方;1/2 放右方;4/5 放右上;6 放左下;7/8 放右下
+    let labelDx, labelDy, anchor;
+    if (i === 2) { labelDx = 0; labelDy = 24; anchor = 'middle'; }
+    else if (i <= 1) { labelDx = 12; labelDy = -2; anchor = 'start'; }
+    else if (i <= 4) { labelDx = 12; labelDy = -2; anchor = 'start'; }
+    else if (i === 5) { labelDx = 12; labelDy = 2; anchor = 'start'; }
+    else if (i === 6) { labelDx = -10; labelDy = -2; anchor = 'end'; }
+    else { labelDx = 12; labelDy = -2; anchor = 'start'; }
+
+    tg.insertAdjacentHTML('beforeend',
+      `<text x="${p.x + labelDx}" y="${p.y + labelDy}" fill="${isCurrent ? '#ffd966' : '#ecedf5'}" font-size="12" font-weight="${isCurrent ? '700' : '600'}" text-anchor="${anchor}">${p.name}</text>`);
+    tg.insertAdjacentHTML('beforeend',
+      `<text x="${p.x + labelDx}" y="${p.y + labelDy + 13}" fill="#9a9ab0" font-size="10" text-anchor="${anchor}">${p.desc}</text>`);
+  });
+})();
+
+// ============ 計算每顆星的目標位置 ============
+DATA.stars.forEach(s => {
+  // 優先用真實 B-V 色指數(連續軸);沒 ci 的星(鄰近星)用光譜型估
+  const ci = (s.ci !== null && s.ci !== undefined) ? s.ci : specToCi(s.spec);
+  s.ci_used = ci;
+  s.tx = ciToX(ci) + jitter(s.zh, 8);  // 小幅 jitter 避免重疊星完全堆疊
+  s.ty = magToY(s.M) + jitter(s.zh + '_y', 8);
+  s.placed = false;
+  s.el = null;
+  s.lumClass = getLumClass(s);
+});
+
+// ============ 填充星座下拉選單(按 group 分組) ============
+(function fillSelect() {
+  const sel = document.getElementById('const-select');
+
+  // IAU 三字母 → 季節分類
+  const SEASON_MAP = {
+    // 春 ☘ (大熊、獅子、牧夫、室女、小熊)
+    'uma': '春季 ☘', 'leo': '春季 ☘', 'boo': '春季 ☘', 'vir': '春季 ☘', 'umi': '春季 ☘',
+    // 夏 ☀ (天琴、天鷹、天鵝、天蠍、蛇夫、巨蛇、人馬)
+    'lyr': '夏季 ☀', 'aql': '夏季 ☀', 'cyg': '夏季 ☀', 'sco': '夏季 ☀',
+    'oph': '夏季 ☀', 'ser': '夏季 ☀', 'sgr': '夏季 ☀',
+    // 秋 🍂 (飛馬、仙后、仙女、英仙、仙王、南魚、天鶴)
+    'peg': '秋季 🍂', 'cas': '秋季 🍂', 'and': '秋季 🍂', 'per': '秋季 🍂',
+    'cep': '秋季 🍂', 'psa': '秋季 🍂', 'gru': '秋季 🍂',
+    // 冬 ❄ (獵戶、金牛、雙子、大犬、御夫)
+    'ori': '冬季 ❄', 'tau': '冬季 ❄', 'gem': '冬季 ❄', 'cma': '冬季 ❄', 'aur': '冬季 ❄',
+    // 南半球 ✦ (南十字、半人馬)
+    'cru': '南半球 ✦', 'cen': '南半球 ✦',
+  };
+
+  // 用季節+其他重新分組
+  const groups = {};
+  const addToGroup = (g, c) => { if (!groups[g]) groups[g] = []; groups[g].push(c); };
+
+  DATA.consts.forEach(c => {
+    if (c.group && c.group.includes('跨星座群')) {
+      addToGroup('跨星座群 ★', c);
+    } else if (c.id === 'nearby') {
+      addToGroup('跨星座群 ★', c);
+    } else if (SEASON_MAP[c.id]) {
+      addToGroup(SEASON_MAP[c.id], c);  // 19 版視差有的 → 季節
+    } else {
+      addToGroup('其他星座', c);  // 剩下 69 個
+    }
+  });
+
+  // 順序:跨星座群 → 春夏秋冬南半球 → 其他
+  const ORDER = ['跨星座群 ★', '春季 ☘', '夏季 ☀', '秋季 🍂', '冬季 ❄', '南半球 ✦', '其他星座'];
+  ORDER.forEach(g => {
+    if (!groups[g]) return;
+    const og = document.createElement('optgroup');
+    og.label = g;
+    // 「其他星座」按中文名排
+    if (g === '其他星座') groups[g].sort((a, b) => a.zh.localeCompare(b.zh, 'zh-Hant'));
+    groups[g].forEach(c => {
+      const o = document.createElement('option');
+      o.value = c.id;
+      o.textContent = c.zh;  // 純星座名,不顯示顆數
+      og.appendChild(o);
+    });
+    sel.appendChild(og);
+  });
+})();
+
+// 總數
+document.getElementById('cnt-total').textContent = DATA.stars.length;
+
+// ============ 飛入動畫 ============
+const starLayer = document.getElementById('star-layer');
+const tt = document.getElementById('tooltip');
+const ttName = document.getElementById('tt-name');
+const ttEn = document.getElementById('tt-en');
+let selectedStar = null;
+
+function showTip(e, s) {
+  ttName.textContent = s.zh;
+  ttEn.textContent = s.en;
+  tt.style.left = e.clientX + 'px';
+  tt.style.top = e.clientY + 'px';
+  tt.classList.add('on');
+}
+function hideTip() { tt.classList.remove('on'); }
+
+function showCard(s) {
+  const card = document.getElementById('star-card');
+  card.classList.remove('empty');
+  const constLabels = s.consts.map(cid => {
+    const c = DATA.consts.find(x => x.id === cid);
+    return c ? c.zh : cid;
+  });
+  card.innerHTML = `
+    <div class="card-head">
+      <div class="card-zh" style="color:${SP_COLORS[s.spec]}">${s.zh}</div>
+      <div class="card-en">${s.en}</div>
+    </div>
+    <div class="card-row"><span class="k">光譜型</span><span class="v hi">${s.spec}${s.spect_raw ? ` <span style="color:var(--text-3);font-size:11px">(${s.spect_raw})</span>` : ''}</span></div>
+    <div class="card-row"><span class="k">演化階段</span><span class="v hi" style="color:${LUM_CN[s.lumClass||'unknown'].color}">${LUM_CN[s.lumClass||'unknown'].zh}</span></div>
+    <div class="card-row"><span class="k">視星等 m</span><span class="v">${s.m.toFixed(2)}</span></div>
+    <div class="card-row"><span class="k">絕對星等 M</span><span class="v hi">${(s.M>=0?'+':'') + s.M.toFixed(2)}</span></div>
+    <div class="card-row"><span class="k">距離</span><span class="v">${s.d} ly</span></div>
+    <div class="card-consts">所屬: ${constLabels.map(z => '<span>' + z + '</span>').join('')}</div>
+  `;
+  // 選中標示
+  if (selectedStar && selectedStar.el) selectedStar.el.classList.remove('selected');
+  selectedStar = s;
+  if (s.el) s.el.classList.add('selected');
+}
+
+function dropStar(s, delay = 0) {
+  if (s.placed) {
+    // 已存在 → 閃一下提示
+    if (s.el) {
+      s.el.classList.remove('flash');
+      void s.el.getBoundingClientRect();
+      s.el.classList.add('flash');
+    }
+    return;
+  }
+  setTimeout(() => {
+    // 起點:左外側,稍微隨機
+    const startX = -30;
+    const startY = 200 + Math.random() * 300;
+    const sz = Math.max(3, 7 - s.M * 0.3); // M 越亮(小)→ 點越大
+    const baseR = Math.max(3, Math.min(9, sz));
+
+    const c = document.createElementNS(SVG_NS, 'circle');
+    c.setAttribute('cx', startX);
+    c.setAttribute('cy', startY);
+    c.setAttribute('r', baseR);
+    c.setAttribute('fill', SP_COLORS[s.spec]);
+    c.setAttribute('class', 'star-dot');
+    c.setAttribute('stroke', 'rgba(255,255,255,0.4)');
+    c.setAttribute('stroke-width', '0.5');
+    c.style.setProperty('--base-r', baseR);
+    c.style.opacity = '0';
+
+    c.addEventListener('mousemove', e => showTip(e, s));
+    c.addEventListener('mouseleave', hideTip);
+    c.addEventListener('click', () => showCard(s));
+    starLayer.appendChild(c);
+    s.el = c;
+    s.placed = true;
+
+    // 動畫:用 requestAnimationFrame 順滑過渡
+    const duration = 700 + Math.random() * 300;
+    const startT = performance.now();
+    function step(now) {
+      const t = Math.min(1, (now - startT) / duration);
+      const easeT = 1 - Math.pow(1 - t, 3); // easeOutCubic
+      const cx = startX + (s.tx - startX) * easeT;
+      const cy = startY + (s.ty - startY) * easeT;
+      c.setAttribute('cx', cx);
+      c.setAttribute('cy', cy);
+      c.style.opacity = easeT;
+      if (t < 1) requestAnimationFrame(step);
+      else updateCounter();
+    }
+    requestAnimationFrame(step);
+  }, delay);
+}
+
+function updateCounter() {
+  const n = DATA.stars.filter(s => s.placed).length;
+  const total = DATA.stars.length;
+  document.getElementById('cnt-now').textContent = n;
+  document.getElementById('progress').style.width = (100 * n / total) + '%';
+  const label = document.getElementById('cnt-label');
+  if (n === 0) label.textContent = '還沒開始';
+  else if (n < total / 3) label.textContent = '剛開始,還看不太出來';
+  else if (n < total * 0.7) label.textContent = '看到一條線了嗎?';
+  else if (n < total) label.textContent = '快滿了!';
+  else label.textContent = '✦ 全部就位 ✦';
+  const pill = document.getElementById('pill-info');
+  pill.textContent = n === 0 ? '點下方「丟一個星座」開始' : `已飛入 ${n} 顆`;
+  pill.classList.toggle('live', n > 0);
+}
+
+// ============ 按鈕事件 ============
+document.getElementById('btn-drop').addEventListener('click', () => {
+  const id = document.getElementById('const-select').value;
+  if (!id) {
+    alert('請先在上方選一個星座');
+    return;
+  }
+
+  // 優先用「視差工具的主要星」(學生指認過的)— 仙后只丟 5 顆,北斗只丟 7 顆
+  // 對應規則:
+  // - 跨星座群 (spring_triangle 等) → 從 STARS_CONSTELLATIONS 找這個 id
+  // - 88 IAU 星座 (ori, uma, ...) → 透過 CONST_19_MAP 對到 19 版 id;沒對到就用 88 版全收
+  // - 鄰近星 (nearby) → 從 STARS_NEARBY
+  let targets = [];
+  const id19 = CONST_19_MAP[id];
+
+  if (id === 'nearby') {
+    targets = DATA.stars.filter(s => s.consts.includes('nearby'));
+  } else if (CROSS_GROUPS.find(g => g.id === id)) {
+    // 跨星座群:從 STARS_CONSTELLATIONS 抓(用 19 版 id 比對)
+    targets = DATA.stars.filter(s => s.consts.includes(id));
+  } else if (id19) {
+    // IAU 星座有對應 19 版 → 只丟視差工具定義的主要星
+    targets = DATA.stars.filter(s => s.consts.includes(id19));
+  } else {
+    // 沒對應 19 版 → 只丟 88 版該星座的「輪廓星」(isOutline=true,最亮 5-8 顆)
+    targets = DATA.stars.filter(s => s.consts.includes(id) && s.isOutline);
+    // 萬一過濾後變零(理論上不會),fallback 全收
+    if (targets.length === 0) {
+      targets = DATA.stars.filter(s => s.consts.includes(id));
+    }
+  }
+
+  // 去重(同顆星可能在 19 版又在 88 版,因 RA/Dec 接近)
+  const seen = new Set();
+  targets = targets.filter(s => {
+    const key = s.zh + '|' + Math.round(s.ra) + '|' + Math.round(s.dec);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  if (targets.length === 0) {
+    alert('找不到這個星座的星');
+    return;
+  }
+  targets.forEach((s, i) => dropStar(s, i * 110));
+});
+
+document.getElementById('btn-all').addEventListener('click', () => {
+  const remaining = DATA.stars.filter(s => !s.placed);
+  remaining.forEach((s, i) => dropStar(s, i * 25));
+});
+
+document.getElementById('btn-clear').addEventListener('click', () => {
+  if (!confirm('要把圖上所有星都清掉嗎?')) return;
+  DATA.stars.forEach(s => {
+    if (s.el) {
+      s.el.remove();
+      s.el = null;
+    }
+    s.placed = false;
+  });
+  selectedStar = null;
+  const card = document.getElementById('star-card');
+  card.classList.add('empty');
+  card.textContent = '點圖上任一顆星看詳細資料';
+  updateCounter();
+});
+
+// 分區 toggle
+document.querySelectorAll('[data-zone]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const z = btn.dataset.zone;
+    const bg = document.getElementById('zone-' + z);
+    const lb = document.getElementById('zone-' + z + '-l');
+    const on = bg.classList.toggle('on');
+    lb.classList.toggle('on', on);
+    btn.classList.toggle('primary', on);
+  });
+});
+
+
+// 對比標準 HR 圖
+document.getElementById('btn-ref').addEventListener('click', () => {
+  const ref = document.getElementById('reference-bg');
+  const on = ref.getAttribute('opacity') === '0';
+  ref.setAttribute('opacity', on ? '1' : '0');
+  document.getElementById('btn-ref').classList.toggle('primary', on);
+});
+
+// 太陽一生軌跡 toggle
+document.getElementById('btn-suntrack').addEventListener('click', () => {
+  const tk = document.getElementById('sun-track');
+  const on = tk.getAttribute('opacity') === '0';
+  tk.setAttribute('opacity', on ? '1' : '0');
+  document.getElementById('btn-suntrack').classList.toggle('primary', on);
+});
+
+// 演化階段篩選
+document.querySelectorAll('.filter-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const target = btn.dataset.lum;
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('primary'));
+    btn.classList.add('primary');
+    DATA.stars.forEach(s => {
+      if (!s.el) return;
+      const baseR = parseFloat(s.el.style.getPropertyValue('--base-r')) || 6;
+      if (target === 'all') {
+        s.el.style.visibility = 'visible';
+        s.el.style.opacity = '1';
+        s.el.style.pointerEvents = 'auto';
+        s.el.setAttribute('r', baseR);
+        s.el.setAttribute('stroke', 'rgba(255,255,255,0.4)');
+        s.el.setAttribute('stroke-width', '0.5');
+      } else if (s.lumClass === target) {
+        s.el.style.visibility = 'visible';
+        s.el.style.opacity = '1';
+        s.el.style.pointerEvents = 'auto';
+        s.el.setAttribute('r', baseR * 1.5);
+        s.el.setAttribute('stroke', '#ffffff');
+        s.el.setAttribute('stroke-width', '2');
+      } else {
+        s.el.style.visibility = 'hidden';
+        s.el.style.pointerEvents = 'none';
+      }
+    });
+  });
+});
+
+// 初始化計數
+updateCounter();
+</script>
+</body>
+</html>
