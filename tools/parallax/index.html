@@ -1,0 +1,1439 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0e0e16">
+<title>星座視差視覺化 v8 — 南十字天文台</title>
+<style>
+  :root {
+    --bg: #0e0e16;
+    --panel: #1a1a25;
+    --panel-2: #232333;
+    --panel-3: #2d2d3f;
+    --border: #36364a;
+    --text: #ecedf5;
+    --text-2: #9a9ab0;
+    --text-3: #6b6b85;
+    --accent: #ffd966;
+    --accent-blue: #6cc1ff;
+    --accent-red: #ff7a7a;
+    --grid-major: rgba(255, 217, 102, 0.30);
+    --grid-mid:   rgba(255, 217, 102, 0.16);
+    --grid-minor: rgba(255, 217, 102, 0.08);
+    --grid-depth-major: rgba(108, 193, 255, 0.32);
+    --grid-depth-mid:   rgba(108, 193, 255, 0.17);
+    --grid-depth-minor: rgba(108, 193, 255, 0.08);
+    --shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, "PingFang TC", "Microsoft JhengHei", "Noto Sans TC", system-ui, sans-serif; }
+  body { min-height: 100vh; padding: 20px; }
+  .app { max-width: 1280px; margin: 0 auto; display: grid; gap: 16px; }
+  header { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; }
+  header h1 { margin: 0; font-size: 22px; font-weight: 600; color: var(--accent); }
+  header .sub { color: var(--text-2); font-size: 13px; }
+
+  .viz-row { display: grid; grid-template-columns: 1fr 280px; gap: 16px; align-items: stretch; }
+  @media (max-width: 900px) {
+    .viz-row { grid-template-columns: 1fr; }
+    .controls { order: 2; }
+    .stage-wrap { order: 1; }
+  }
+
+  .stage-wrap { background: var(--panel); border-radius: 14px; padding: 16px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .stage-head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+  .stage-head h2 { margin: 0; font-size: 16px; font-weight: 500; color: var(--text); }
+  .mode-pill { padding: 4px 12px; border-radius: 999px; font-size: 12px; font-weight: 500; background: var(--panel-3); color: var(--text-2); transition: all 0.25s; }
+  .mode-pill.sky { background: rgba(255, 217, 102, 0.18); color: var(--accent); }
+  .mode-pill.depth { background: rgba(108, 193, 255, 0.18); color: var(--accent-blue); }
+
+  .stage { position: relative; width: 100%; aspect-ratio: 11 / 7; background: radial-gradient(ellipse at center, #06060d 0%, #02020a 100%); border-radius: 10px; overflow: hidden; touch-action: none; cursor: grab; }
+  .stage.grabbing { cursor: grabbing; }
+  .stage svg { display: block; width: 100%; height: 100%; }
+
+  .stage-foot { display: flex; align-items: center; gap: 18px; padding: 10px 12px; background: var(--panel-2); border-radius: 8px; flex-wrap: wrap; }
+  .scale-item { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-2); }
+  .scale-item .bar { width: 80px; height: 3px; position: relative; }
+  .scale-item .bar::before, .scale-item .bar::after { content: ''; position: absolute; top: -4px; width: 3px; height: 11px; background: inherit; }
+  .scale-item .bar::before { left: 0; } .scale-item .bar::after { right: 0; }
+  .scale-item.deg .bar, .scale-item.deg .bar::before, .scale-item.deg .bar::after { background: var(--accent); }
+  .scale-item.ly  .bar, .scale-item.ly  .bar::before, .scale-item.ly  .bar::after { background: var(--accent-blue); }
+  .scale-item b { color: var(--text); font-weight: 500; }
+  .scale-item.deg b { color: var(--accent); }
+  .scale-item.ly  b { color: var(--accent-blue); }
+
+  .controls { background: var(--panel); border-radius: 14px; padding: 16px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 14px; align-self: start; }
+  .control-group { display: flex; flex-direction: column; gap: 6px; }
+  .control-group label { font-size: 12px; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.5px; }
+  .seg { display: grid; grid-template-columns: 1fr 1fr 1fr; background: var(--panel-2); border-radius: 8px; padding: 3px; gap: 3px; }
+  .seg button { padding: 7px 0; border-radius: 6px; border: none; background: transparent; color: var(--text-2); font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.15s; font-family: inherit; }
+  .seg button:hover { color: var(--text); background: var(--panel-3); }
+  .seg button.active { background: var(--accent); color: #1a1a22; }
+  select, input[type="range"] { font-family: inherit; }
+  select { width: 100%; padding: 9px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel-2); color: var(--text); font-size: 14px; }
+  select:hover { border-color: var(--text-3); }
+  .slider-row { display: flex; align-items: center; gap: 10px; }
+  .slider-row input[type="range"] { flex: 1; min-width: 0; }
+  .slider-val { font-size: 13px; min-width: 70px; text-align: right; color: var(--accent-blue); font-variant-numeric: tabular-nums; }
+  input[type="range"] { -webkit-appearance: none; appearance: none; height: 4px; background: var(--panel-3); border-radius: 2px; outline: none; }
+  input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: var(--accent); cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.4); }
+  input[type="range"]::-moz-range-thumb { width: 18px; height: 18px; border-radius: 50%; background: var(--accent); border: none; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.4); }
+  .toggles { display: flex; gap: 6px; flex-wrap: wrap; }
+  .toggles button { padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--panel-2); color: var(--text-2); font-size: 12px; cursor: pointer; transition: all 0.15s; font-family: inherit; }
+  .toggles button:hover { color: var(--text); }
+  .toggles button.active { background: var(--accent-blue); border-color: var(--accent-blue); color: #0e0e16; }
+  .hint { font-size: 11px; color: var(--text-3); line-height: 1.5; padding: 8px; background: var(--panel-2); border-radius: 6px; }
+  .hr-legend { background: var(--panel-2); border-radius: 6px; padding: 8px; }
+  .hr-title { font-size: 11px; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+  .hr-ramp { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+  .hr-stop { padding: 6px 0; text-align: center; font-size: 11px; font-weight: 600; color: #07070d; border-radius: 3px; cursor: help; transition: transform 0.12s; }
+  .hr-stop:hover { transform: scale(1.15); }
+  .hr-axis { display: flex; justify-content: space-between; font-size: 10px; color: var(--text-3); margin-top: 4px; padding: 0 2px; }
+
+  /* SVG label styling */
+  .star-label { font-size: 11px; fill: var(--text); pointer-events: none; }
+  .star-label .zh { font-size: 13px; font-weight: 500; }
+  .star-label .en { font-size: 10px; fill: var(--text-2); }
+  .star-label .meta { font-size: 10px; fill: var(--accent); }
+  .star-label .meta.abs { fill: var(--accent-blue); }
+  .star-label-bg { fill: rgba(7, 7, 13, 0.85); rx: 4; ry: 4; }
+  .leader { stroke: var(--accent); stroke-width: 0.8; opacity: 0.4; stroke-dasharray: 3 2; pointer-events: none; }
+  .grid-line.major { stroke-width: 1.1; }
+  .grid-line.mid   { stroke-width: 0.7; }
+  .grid-line.minor { stroke-width: 0.45; }
+  .grid-line.sky.major  { stroke: var(--grid-major); }
+  .grid-line.sky.mid    { stroke: var(--grid-mid); }
+  .grid-line.sky.minor  { stroke: var(--grid-minor); }
+  .grid-line.depth.major{ stroke: var(--grid-depth-major); }
+  .grid-line.depth.mid  { stroke: var(--grid-depth-mid); }
+  .grid-line.depth.minor{ stroke: var(--grid-depth-minor); }
+  .axis-depth line { stroke: var(--accent-blue); stroke-width: 1.5; }
+  .axis-depth text { fill: var(--accent-blue); font-size: 11px; text-anchor: middle; }
+  .axis-depth text.title { font-size: 12px; font-weight: 500; }
+  .const-line { stroke: #4080cc; stroke-width: 1.5; opacity: 0.55; pointer-events: none; }
+  .sight-line { stroke: #4080cc; stroke-width: 0.6; opacity: 0; stroke-dasharray: 4 3; pointer-events: none; }
+  .earth { fill: var(--accent-blue); }
+  .earth-ring { fill: none; stroke: var(--accent-blue); stroke-width: 1.5; opacity: 0; }
+  .earth-label { fill: var(--accent-blue); font-size: 13px; font-weight: 500; text-anchor: middle; pointer-events: none; }
+  .star-glow { cursor: pointer; transition: opacity 0.15s; }
+  .star-glow .glow-extra { opacity: 0; transition: opacity 0.15s; pointer-events: none; }
+  .star-glow.hover .glow-extra { opacity: 0.9; }
+
+  /* Details panel */
+  .details { background: var(--panel); border-radius: 14px; overflow: hidden; box-shadow: var(--shadow); }
+  .details-head { display: flex; align-items: center; gap: 12px; padding: 14px 18px; cursor: pointer; user-select: none; background: var(--panel-2); transition: background 0.2s; }
+  .details-head:hover { background: var(--panel-3); }
+  .details-head h3 { margin: 0; flex: 1; font-size: 15px; font-weight: 500; color: var(--accent); }
+  .details-head .meta { color: var(--text-2); font-size: 12px; }
+  .details-head .arrow { color: var(--text-2); font-size: 14px; transition: transform 0.25s; display: inline-block; width: 16px; text-align: center; }
+  .details.collapsed .details-head .arrow { transform: rotate(-90deg); }
+  .details-body { padding: 16px 18px; max-height: 1500px; overflow: hidden; transition: max-height 0.35s ease, padding 0.25s; }
+  .details.collapsed .details-body { max-height: 0; padding-top: 0; padding-bottom: 0; }
+  .star-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+  .star-card { background: var(--panel-2); border-radius: 8px; padding: 11px 13px; border-left: 3px solid var(--accent); transition: transform 0.15s, border-color 0.15s; cursor: pointer; }
+  .star-card:hover, .star-card.hover { transform: translateY(-2px); }
+  .star-card.spec-O { border-left-color: #92b5ff; }
+  .star-card.spec-B { border-left-color: #a8c0ff; }
+  .star-card.spec-A { border-left-color: #cad8ff; }
+  .star-card.spec-F { border-left-color: #f8f8ff; }
+  .star-card.spec-G { border-left-color: #fff2b0; }
+  .star-card.spec-K { border-left-color: #ffb060; }
+  .star-card.spec-M { border-left-color: #ff5a40; }
+  .star-card .zh { font-size: 15px; font-weight: 500; color: var(--text); }
+  .star-card .en { font-size: 11px; color: var(--text-2); margin-bottom: 6px; }
+  .star-card .kv { display: flex; justify-content: space-between; font-size: 12px; margin-top: 3px; }
+  .star-card .kv .k { color: var(--text-2); }
+  .star-card .kv .v { color: var(--text); font-variant-numeric: tabular-nums; }
+  .star-card .kv .v.app { color: var(--accent); }
+  .star-card .kv .v.abs { color: var(--accent-blue); }
+  .star-card .kv .v.lum { color: #ffaa55; }
+  .star-card .chip { display: inline-flex; align-items: center; gap: 5px; }
+  .star-card .chip i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+  .star-card .desc { font-size: 11px; color: var(--text-2); margin-top: 7px; padding-top: 6px; border-top: 1px solid var(--panel-3); line-height: 1.55; }
+
+  .footer { text-align: center; color: var(--text-3); font-size: 11px; padding-bottom: 8px; }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <header>
+    <div>
+      <h1>星座視差視覺化 v8</h1>
+      <div class="sub">南十字天文台 P38 教學版 · 純 SVG 像素對齊版本</div>
+    </div>
+    <div class="sub">用滑鼠或手指<b style="color:var(--text-2)">直接拖曳畫面</b>就能旋轉視角</div>
+  </header>
+
+  <div class="viz-row">
+    <div class="stage-wrap">
+      <div class="stage-head">
+        <h2 id="stage-title">南十字座 Crux · 從地球看</h2>
+        <div class="mode-pill sky" id="mode-pill">視星等模式</div>
+      </div>
+      <div class="stage" id="stage">
+        <svg id="svg" viewBox="0 0 1100 700" preserveAspectRatio="xMidYMid meet">
+          <defs id="defs"></defs>
+          <g id="grid-sky"></g>
+          <g id="grid-depth"></g>
+          <g id="depth-axis"></g>
+          <g id="sight-lines"></g>
+          <g id="const-lines"></g>
+          <g id="leader-lines"></g>
+          <g id="stars"></g>
+          <g id="earth-group"></g>
+          <g id="labels"></g>
+        </svg>
+      </div>
+      <div class="stage-foot">
+        <div class="scale-item deg" id="deg-scale">
+          <div class="bar"></div>
+          <div><b id="deg-val">1°</b> 天空角度</div>
+        </div>
+        <div class="scale-item ly" id="ly-scale">
+          <div class="bar"></div>
+          <div><b id="ly-val">100</b> 光年</div>
+        </div>
+        <div style="margin-left:auto; color:var(--text-3); font-size:12px;">
+          1 格 ≡ <b id="grid-label" style="color:var(--text);">100 px</b>
+        </div>
+      </div>
+    </div>
+
+    <aside class="controls">
+      <div class="control-group">
+        <label>選星座</label>
+        <select id="constellation">
+          <optgroup label="跨星座星群 ★">
+            <option value="spring_triangle">春季三角 (大角+角宿一+五帝座一)</option>
+            <option value="summer_triangle">夏季大三角 (織女+牛郎+天津四)</option>
+            <option value="winter_hexagon">冬季大六邊形 (Sirius+Procyon+Pollux+Capella+Aldebaran+Rigel)</option>
+          </optgroup>
+          <optgroup label="春季 ☘">
+            <option value="ursamajor">北斗七星 Ursa Major</option>
+            <option value="leo">獅子座 Leo</option>
+            <option value="bootes">牧夫座 Boötes</option>
+            <option value="virgo">室女座 Virgo</option>
+          </optgroup>
+          <optgroup label="夏季 ☀ (Summer Triangle)">
+            <option value="lyra">天琴座 Lyra (織女)</option>
+            <option value="aquila">天鷹座 Aquila (牛郎)</option>
+            <option value="cygnus">天鵝座 Cygnus (天津四)</option>
+            <option value="scorpius">天蠍座 Scorpius</option>
+          </optgroup>
+          <optgroup label="秋季 🍂">
+            <option value="pegasus">飛馬座 Pegasus</option>
+            <option value="cassiopeia">仙后座 Cassiopeia</option>
+          </optgroup>
+          <optgroup label="冬季 ❄ (Winter Hexagon)">
+            <option value="orion">獵戶座 Orion</option>
+            <option value="taurus">金牛座 Taurus</option>
+            <option value="gemini">雙子座 Gemini</option>
+            <option value="canismajor">大犬座 Canis Major (天狼)</option>
+          </optgroup>
+          <optgroup label="南半球 ✦">
+            <option value="crux">南十字座 Crux</option>
+            <option value="centaurus">半人馬座 Centaurus</option>
+          </optgroup>
+        </select>
+      </div>
+
+      <div class="control-group">
+        <label>視角</label>
+        <div class="seg">
+          <button data-view="0" class="active">從地球看</button>
+          <button data-view="45">斜看</button>
+          <button data-view="88">側面看</button>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <label>旋轉角度</label>
+        <div class="slider-row">
+          <input type="range" id="angle" min="0" max="90" value="0" step="0.5">
+          <span class="slider-val" id="angle-val" style="color:var(--accent);">0°</span>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <label>俯視高度</label>
+        <div class="slider-row">
+          <input type="range" id="tilt" min="0" max="25" value="0" step="1">
+          <span class="slider-val" id="tilt-val">0 (0°)</span>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <label>深度比例 (全局)</label>
+        <div class="slider-row">
+          <input type="range" id="dist-scale" min="0" max="6" value="3" step="1">
+          <span class="slider-val" id="dist-scale-val">100 ly/格</span>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <label>選項</label>
+        <div class="toggles">
+          <button id="t-grid">顯示格線</button>
+          <button id="t-spin">自動旋轉</button>
+          <button id="t-sight">連線到地球</button>
+          <button id="t-earth">隱藏地球</button>
+        </div>
+      </div>
+
+      <div class="hint">
+        <b>操作：</b>直接拖曳畫面 (滑鼠或手指) 即可旋轉視角。<br>
+        切換不同星座 + 維持「深度比例 = 100 ly/格」可以直接比較星座的遠近規模。<br>
+        滑鼠移到星上會在下方面板高亮對應卡片，反之亦然。<br>
+        「隱藏地球」可以讓地球退場避免擋畫面，但側面視角時還是會自動現身。
+      </div>
+
+      <div class="hr-legend">
+        <div class="hr-title">光譜色 (赫羅圖)</div>
+        <div class="hr-ramp">
+          <div class="hr-stop" style="background:#92b5ff" title="O型 >30,000K">O</div>
+          <div class="hr-stop" style="background:#a8c0ff" title="B型 10,000-30,000K">B</div>
+          <div class="hr-stop" style="background:#cad8ff" title="A型 7,500-10,000K">A</div>
+          <div class="hr-stop" style="background:#f8f8ff;color:#333" title="F型 6,000-7,500K">F</div>
+          <div class="hr-stop" style="background:#fff2b0;color:#333" title="G型 5,200-6,000K (太陽)">G</div>
+          <div class="hr-stop" style="background:#ffb060;color:#333" title="K型 3,700-5,200K">K</div>
+          <div class="hr-stop" style="background:#ff5a40" title="M型 2,400-3,700K">M</div>
+        </div>
+        <div class="hr-axis"><span>熱</span><span>太陽</span><span>冷</span></div>
+      </div>
+    </aside>
+  </div>
+
+  <div class="details" id="details">
+    <div class="details-head" id="details-head">
+      <h3>本星座各星詳細資料</h3>
+      <span class="meta" id="details-meta"></span>
+      <span class="arrow">▼</span>
+    </div>
+    <div class="details-body">
+      <div class="star-grid" id="star-grid"></div>
+    </div>
+  </div>
+
+  <div class="footer">
+    © 2026 南十字天文台教學素材 v8 · 恆星位置：Hipparcos / Gaia · 純 SVG 投影 / 拋棄 Three.js / 像素對齊格線
+  </div>
+</div>
+
+<script>
+(function() {
+'use strict';
+
+// ===== Data =====
+// 赫羅圖 / 黑體光譜色 (Mitchell Charity 之推算值修正)
+const SPEC_HEX = {
+  O: '#92b5ff',  // 30,000+ K  深藍
+  B: '#a8c0ff',  // 10-30k K   藍白
+  A: '#cad8ff',  // 7.5-10k K  白偏藍
+  F: '#f8f8ff',  // 6-7.5k K   純白
+  G: '#fff2b0',  // 5-6k K     黃 (太陽型)
+  K: '#ffb060',  // 3.7-5k K   橘
+  M: '#ff5a40'   // 2.4-3.7k K 紅
+};
+// 核心 (中心最亮點) 的色票 — 高溫星偏白，低溫星就染色
+const SPEC_CORE = {
+  O: '#f0f3ff',
+  B: '#f5f8ff',
+  A: '#fcfcff',
+  F: '#ffffff',
+  G: '#fff8d8',
+  K: '#ffd9a8',
+  M: '#ffa078'
+};
+const SPEC_INFO = {
+  O:{name:'極熱藍星', temp:'> 30,000 K'},
+  B:{name:'高溫藍白', temp:'10,000–30,000 K'},
+  A:{name:'白色',     temp:'7,500–10,000 K'},
+  F:{name:'黃白',     temp:'6,000–7,500 K'},
+  G:{name:'黃色 (太陽型)', temp:'5,200–6,000 K'},
+  K:{name:'橘紅',     temp:'3,700–5,200 K'},
+  M:{name:'紅 (多為紅巨星)', temp:'2,400–3,700 K'}
+};
+
+// [zh, en, RA(deg), Dec(deg), dist_ly, apparent_mag, spectral_type]
+const RAW = {
+  crux: { centerRA:187.5, centerDec:-60, scale:1.0,
+    stars:[
+      ['十字架一','Gacrux (γ Cru)',187.79,-57.11, 89,1.6,'M'],
+      ['十字架二','Acrux (α Cru)', 186.65,-63.10,321,0.8,'B'],
+      ['十字架三','Mimosa (β Cru)',191.93,-59.69,278,1.3,'B'],
+      ['十字架四','Imai (δ Cru)',  183.78,-58.75,345,2.8,'B'],
+      ['十字架五','Ginan (ε Cru)', 185.34,-60.40,228,3.6,'K']
+    ], lines:[[0,1],[2,3]] },
+  orion: { centerRA:84, centerDec:0, scale:0.9,
+    stars:[
+      ['參宿四','Betelgeuse (α Ori)',88.79, 7.41, 548,0.5,'M'],
+      ['參宿七','Rigel (β Ori)',     78.63,-8.20, 860,0.2,'B'],
+      ['參宿五','Bellatrix (γ Ori)', 81.28, 6.35, 250,1.6,'B'],
+      ['參宿六','Saiph (κ Ori)',     86.94,-9.67, 650,2.1,'B'],
+      ['參宿一','Alnitak (ζ Ori)',   85.19,-1.94, 800,1.7,'O'],
+      ['參宿二','Alnilam (ε Ori)',   84.05,-1.20,1976,1.7,'B'],
+      ['參宿三','Mintaka (δ Ori)',   83.00,-0.30,1200,2.2,'O'],
+      ['觜宿一','Meissa (λ Ori)',    83.78, 9.93,1100,3.4,'O'],
+      ['伐三',  'Hatysa (ι Ori)',    83.86,-5.91,2300,2.77,'O']
+    ], lines:[[0,2],[0,4],[2,6],[4,5],[5,6],[4,3],[6,1],[0,7],[2,7]] },
+  ursamajor: { centerRA:185, centerDec:55, scale:0.5,
+    stars:[
+      ['天樞','Dubhe (α UMa)', 165.93,61.75,124,1.8,'K'],
+      ['天璇','Merak (β UMa)', 165.46,56.38, 80,2.4,'A'],
+      ['天璣','Phecda (γ UMa)',178.46,53.69, 84,2.4,'A'],
+      ['天權','Megrez (δ UMa)',183.86,57.03, 81,3.3,'A'],
+      ['玉衡','Alioth (ε UMa)',193.51,55.96, 81,1.8,'A'],
+      ['開陽','Mizar (ζ UMa)', 200.98,54.93, 83,2.3,'A'],
+      ['搖光','Alkaid (η UMa)',206.88,49.31,104,1.9,'B']
+    ], lines:[[0,1],[1,2],[2,3],[3,0],[3,4],[4,5],[5,6]] },
+  scorpius: { centerRA:252, centerDec:-30, scale:0.5,
+    stars:[
+      ['心宿二','Antares (α Sco)',  247.35,-26.43,550,1.0,'M'],
+      ['房宿四','Acrab (β Sco)',    241.36,-19.81,400,2.6,'B'],
+      ['房宿三','Dschubba (δ Sco)', 240.08,-22.62,400,2.3,'B'],
+      ['房宿一','π Sco',            239.71,-26.11,590,2.9,'B'],
+      ['心宿一','σ Sco',            245.30,-25.59,735,2.9,'B'],
+      ['心宿三','τ Sco',            248.97,-28.22,470,2.8,'B'],
+      ['尾宿五','Sargas (θ Sco)',   264.33,-42.99,300,1.9,'F'],
+      ['尾宿八','Shaula (λ Sco)',   263.40,-37.10,570,1.6,'B'],
+      ['尾宿三','Wei (ε Sco)',      252.54,-34.29, 65,2.29,'K'],
+      ['尾宿二','Denebakrab (μ¹)',  251.49,-38.05,822,3.00,'B']
+    ], lines:[[1,2],[2,3],[3,4],[4,0],[0,5],[5,8],[8,9],[9,6],[6,7]] },
+  centaurus: { centerRA:207, centerDec:-50, scale:0.5,
+    stars:[
+      ['南門二','Rigil Kent. (α Cen)',219.90,-60.83, 4.4,-0.27,'G'],
+      ['馬腹一','Hadar (β Cen)',      210.96,-60.37,390, 0.6, 'B'],
+      ['庫樓七','Muhlifain (γ Cen)',  190.38,-48.96,130, 2.2, 'A'],
+      ['庫樓三','Menkent (θ Cen)',    211.67,-36.37, 59, 2.1, 'K'],
+      ['庫樓一','ε Cen',               204.97,-53.47,380, 2.3, 'B'],
+      ['庫樓二','Iota Cen (ι Cen)',   200.15,-36.71, 59, 2.75,'A'],
+      ['庫樓四','Eta Cen (η Cen)',    218.88,-42.16,308, 2.31,'B']
+    ], lines:[[0,1],[1,4],[4,2],[1,3],[3,5],[1,6]] },
+  cassiopeia: { centerRA:15, centerDec:60, scale:0.6,
+    stars:[
+      ['王良一','Caph (β Cas)',    2.29,59.15, 55,2.3,'F'],
+      ['王良四','Schedar (α Cas)',10.13,56.54,230,2.2,'K'],
+      ['策',    'Navi (γ Cas)',   14.18,60.72,613,2.5,'B'],
+      ['閣道三','Ruchbah (δ Cas)',21.45,60.24, 99,2.7,'A'],
+      ['閣道二','Segin (ε Cas)',  28.60,63.67,440,3.4,'B']
+    ], lines:[[0,1],[1,2],[2,3],[3,4]] },
+  leo: { centerRA:165, centerDec:17, scale:0.55,
+    stars:[
+      ['軒轅十四','Regulus (α Leo)',   152.09,11.97, 79,1.4,'B'],
+      ['五帝座一','Denebola (β Leo)',  177.27,14.57, 36,2.1,'A'],
+      ['軒轅十二','Algieba (γ Leo)',   154.99,19.84,130,2.0,'K'],
+      ['西上相',  'Zosma (δ Leo)',     168.53,20.52, 58,2.6,'A'],
+      ['西次相',  'Chertan (θ Leo)',   168.56,15.43,165,3.3,'A'],
+      ['軒轅九',  'Ras Elased (ε Leo)',146.46,23.77,247,3.0,'G'],
+      ['軒轅十一','Adhafera (ζ Leo)',  154.99,23.42,274,3.43,'F'],
+      ['軒轅七',  'Subra (η Leo)',     151.83,16.76,1270,3.51,'A']
+    ], lines:[[0,2],[2,5],[0,4],[4,3],[3,1],[1,3],[2,6],[0,7]] },
+
+  // ===== 春季 =====
+  bootes: { centerRA:215, centerDec:32, scale:0.45,
+    stars:[
+      ['大角',    'Arcturus (α Boo)',  213.92,19.18, 37,-0.05,'K'],
+      ['七公七',  'Nekkar (β Boo)',    225.49,40.39,219, 3.49,'G'],
+      ['梗河三',  'Seginus (γ Boo)',   218.02,38.31, 86, 3.04,'A'],
+      ['梗河一',  'Izar (ε Boo)',      221.25,27.07,203, 2.37,'K'],
+      ['玄戈',    'Rho Boo (ρ Boo)',   217.96,30.37,149, 3.58,'K'],
+      ['右攝提一','Muphrid (η Boo)',   208.67,18.40, 37, 2.68,'G'],
+      ['七公六',  'Delta Boo (δ Boo)', 228.88,33.31,121, 3.46,'G']
+    ], lines:[[0,3],[3,1],[1,6],[6,2],[2,4],[4,0],[0,5]] },
+  virgo: { centerRA:195, centerDec:0, scale:0.32,
+    stars:[
+      ['角宿一',  'Spica (α Vir)',         201.30,-11.16,250, 0.97,'B'],
+      ['東上相',  'Porrima (γ Vir)',       190.42, -1.45, 38, 2.74,'F'],
+      ['東次將',  'Vindemiatrix (ε Vir)',  195.54, 10.96,110, 2.83,'G'],
+      ['亢宿一',  'Heze (ζ Vir)',          203.67, -0.60, 74, 3.37,'A'],
+      ['右執法',  'Zavijava (β Vir)',      177.67,  1.76, 36, 3.59,'F'],
+      ['東上將',  'Delta Vir (δ Vir)',     193.90,  3.40,198, 3.39,'M'],
+      ['右執法旁','Zaniah (η Vir)',        184.98, -0.67,265, 3.89,'A']
+    ], lines:[[0,3],[3,1],[1,5],[5,2],[1,6],[6,4]] },
+
+  // ===== 夏季 (Summer Triangle: Vega + Altair + Deneb) =====
+  lyra: { centerRA:282, centerDec:36, scale:0.9,
+    stars:[
+      ['織女',    'Vega (α Lyr)',     279.23,38.78, 25, 0.03,'A'],
+      ['漸台一',  'Sheliak (β Lyr)',  282.52,33.36,960, 3.45,'A'],
+      ['漸台二',  'Sulafat (γ Lyr)',  284.74,32.69,620, 3.24,'B'],
+      ['漸台三',  'Delta Lyr (δ Lyr)',283.63,36.90,880, 4.30,'M'],
+      ['漸台四',  'Zeta Lyr (ζ Lyr)', 281.19,37.61,156, 4.34,'A']
+    ], lines:[[0,4],[4,1],[1,2],[2,3],[3,4]] },
+  aquila: { centerRA:295, centerDec:5, scale:0.45,
+    stars:[
+      ['牛郎',    'Altair (α Aql)',   297.70, 8.87, 17, 0.76,'A'],
+      ['河鼓三',  'Tarazed (γ Aql)',  296.57,10.61,460, 2.72,'K'],
+      ['河鼓一',  'Alshain (β Aql)',  298.83, 6.41, 45, 3.71,'G'],
+      ['天弁九',  'Zeta Aql (ζ Aql)', 286.36,13.86, 83, 2.99,'A'],
+      ['女宿增四','Theta Aql (θ Aql)',302.83,-0.82,286, 3.24,'B'],
+      ['天弁五',  'Delta Aql (δ Aql)',291.37, 3.11, 50, 3.36,'F'],
+      ['天弁三',  'Lambda Aql (λ Aql)',286.56,-4.88,125, 3.43,'B']
+    ], lines:[[3,1],[1,0],[0,2],[2,4],[0,5],[5,6]] },
+  cygnus: { centerRA:303, centerDec:38, scale:0.42,
+    stars:[
+      ['天津四',  'Deneb (α Cyg)',    310.36,45.28,2615,1.25,'A'],
+      ['天津一',  'Sadr (γ Cyg)',     305.56,40.26,1800,2.23,'F'],
+      ['輦道增七','Albireo (β Cyg)',  292.68,27.96, 430,3.05,'K'],
+      ['天津九',  'Gienah (ε Cyg)',   311.55,33.97,  73,2.48,'K'],
+      ['天津二',  'Delta Cyg (δ Cyg)',296.24,45.13, 165,2.87,'A'],
+      ['天津七',  'Zeta Cyg (ζ Cyg)', 318.24,30.23, 150,3.21,'G'],
+      ['天津三',  'Eta Cyg (η Cyg)',  299.08,35.08, 140,3.89,'K']
+    ], lines:[[0,1],[1,2],[3,1],[1,4],[3,5],[2,6]] },
+
+  // ===== 秋季 =====
+  pegasus: { centerRA:340, centerDec:20, scale:0.32,
+    stars:[
+      ['室宿一',  'Markab (α Peg)',    346.19,15.21,133,2.49,'B'],
+      ['室宿二',  'Scheat (β Peg)',    345.94,28.08,196,2.42,'M'],
+      ['壁宿一',  'Algenib (γ Peg)',     3.31,15.18,333,2.83,'B'],
+      ['壁宿二',  'Alpheratz (α And)',   2.10,29.09, 97,2.06,'B'],
+      ['危宿三',  'Enif (ε Peg)',      326.05, 9.88,690,2.40,'K'],
+      ['離宮四',  'Matar (η Peg)',     340.75,30.22,167,2.94,'G'],
+      ['雷電二',  'Homam (ζ Peg)',     340.37,10.83,209,3.40,'B'],
+      ['霹靂一',  'Baham (θ Peg)',     332.55, 6.20, 92,3.52,'A']
+    ], lines:[[0,1],[1,3],[3,2],[2,0],[0,6],[6,4],[4,7],[1,5]] },
+
+  // ===== 冬季 =====
+  taurus: { centerRA:70, centerDec:20, scale:0.4,
+    stars:[
+      ['畢宿五',    'Aldebaran (α Tau)',  68.98,16.51, 65, 0.85,'K'],
+      ['五車五',    'Elnath (β Tau)',     81.57,28.61,134, 1.65,'B'],
+      ['畢宿七',    'Hyadum I (γ Tau)',   64.95,15.63,154, 3.65,'K'],
+      ['畢宿四',    'Theta¹ (θ¹ Tau)',    67.15,15.96,150, 3.40,'A'],
+      ['天關',      'Zeta Tau (ζ Tau)',   84.41,21.14,440, 2.97,'B'],
+      ['昴宿六',    'Alcyone (η Tau)',    56.87,24.11,440, 2.87,'B'],
+      ['畢宿六',    'Ain (ε Tau)',        67.15,19.18,155, 3.53,'K'],
+      ['畢宿一',    'Hyadum II (δ¹ Tau)', 65.73,17.54,153, 3.77,'K'],
+      ['昴宿三',    'Atlas (27 Tau)',     56.87,24.05,440, 3.62,'B'],
+      ['昴宿一',    'Electra (17 Tau)',   56.22,24.11,440, 3.70,'B'],
+      ['昴宿四',    'Maia (20 Tau)',      56.46,24.37,440, 3.87,'B']
+    ], lines:[[0,6],[6,7],[0,3],[3,2],[6,1],[2,4]] },
+  gemini: { centerRA:108, centerDec:24, scale:0.42,
+    stars:[
+      ['北河二',  'Castor (α Gem)',    113.65,31.89, 51,1.58,'A'],
+      ['北河三',  'Pollux (β Gem)',    116.33,28.03, 34,1.14,'K'],
+      ['井宿三',  'Alhena (γ Gem)',     99.43,16.40,109,1.93,'A'],
+      ['天樽二',  'Wasat (δ Gem)',     110.03,21.98, 60,3.53,'F'],
+      ['井宿五',  'Mebsuta (ε Gem)',   100.98,25.13,840,3.06,'G'],
+      ['井宿一',  'Tejat (μ Gem)',      95.74,22.51,232,2.87,'M'],
+      ['北河增','Kappa Gem (κ Gem)',   116.11,24.40,143,3.57,'G'],
+      ['井宿四',  'Alzirr (ξ Gem)',    101.32,12.90, 60,3.35,'F']
+    ], lines:[[0,1],[0,4],[4,5],[1,3],[3,2],[2,7],[1,6]] },
+  canismajor: { centerRA:103, centerDec:-22, scale:0.42,
+    stars:[
+      ['天狼',    'Sirius (α CMa)',    101.29,-16.72,  8.6,-1.46,'A'],
+      ['弧矢七',  'Adhara (ε CMa)',    104.66,-28.97, 430, 1.50,'B'],
+      ['弧矢一',  'Wezen (δ CMa)',     107.10,-26.39,1800, 1.83,'F'],
+      ['軍市一',  'Mirzam (β CMa)',     95.67,-17.96, 500, 1.98,'B'],
+      ['弧矢二',  'Aludra (η CMa)',    111.02,-29.30,2000, 2.45,'B'],
+      ['弧矢五',  'Phurud (ζ CMa)',     95.08,-30.06, 336, 3.02,'B'],
+      ['軍市五',  'Omicron² CMa (ο²)', 105.76,-23.83,2880, 3.04,'B']
+    ], lines:[[3,0],[0,2],[2,1],[2,4],[3,5],[0,6]] },
+
+  // ===== 跨星座星群 (Asterisms) =====
+  spring_triangle: { centerRA:197, centerDec:7, scale:0.18,
+    stars:[
+      ['大角',    'Arcturus (α Boo)',  213.92, 19.18, 37,-0.05,'K'],
+      ['角宿一',  'Spica (α Vir)',     201.30,-11.16,250, 0.97,'B'],
+      ['五帝座一','Denebola (β Leo)',  177.27, 14.57, 36, 2.10,'A']
+    ], lines:[[0,1],[1,2],[2,0]] },
+  summer_triangle: { centerRA:295, centerDec:27, scale:0.2,
+    stars:[
+      ['織女',    'Vega (α Lyr)',      279.23, 38.78,  25, 0.03,'A'],
+      ['牛郎',    'Altair (α Aql)',    297.70,  8.87,  17, 0.76,'A'],
+      ['天津四',  'Deneb (α Cyg)',     310.36, 45.28,2615, 1.25,'A']
+    ], lines:[[0,1],[1,2],[2,0]] },
+  winter_hexagon: { centerRA:92, centerDec:14, scale:0.13,
+    stars:[
+      ['天狼',    'Sirius (α CMa)',    101.29,-16.72,  8.6,-1.46,'A'],
+      ['南河三',  'Procyon (α CMi)',   114.83,  5.23, 11.5, 0.38,'F'],
+      ['北河三',  'Pollux (β Gem)',    116.33, 28.03,  34, 1.14,'K'],
+      ['五車二',  'Capella (α Aur)',    79.17, 46.00,  42, 0.08,'G'],
+      ['畢宿五',  'Aldebaran (α Tau)',  68.98, 16.51,  65, 0.85,'K'],
+      ['參宿七',  'Rigel (β Ori)',      78.63, -8.20, 860, 0.20,'B'],
+      ['參宿四',  'Betelgeuse (α Ori)', 88.79,  7.41, 548, 0.50,'M']
+    ], lines:[[3,2],[2,1],[1,0],[0,5],[5,4],[4,3],[1,6],[6,5],[6,0]] }
+};
+
+const STAR_DESC = {
+  'Gacrux (γ Cru)':'南十字最北端的紅巨星，89 ly 是 5 顆主星中最近的一顆。',
+  'Acrux (α Cru)': '南十字頂端最亮的雙星系統，B 型藍白星。',
+  'Mimosa (β Cru)':'南十字東邊的藍白巨星，常與 Acrux 並列辨識方向。',
+  'Imai (δ Cru)':  '南十字最暗的主星，距離與其他三顆相近。',
+  'Ginan (ε Cru)': '南十字第五顆星，澳洲原住民稱呼，2018 年由 IAU 正式命名。',
+  'Betelgeuse (α Ori)':'獵戶肩膀的紅超巨星，已進入恆星演化末期，未來會超新星爆炸。',
+  'Rigel (β Ori)':     '獵戶腳邊最亮的藍白超巨星，真實亮度約太陽 12 萬倍。',
+  'Bellatrix (γ Ori)': '獵戶另一肩，名為「女戰士」的高溫 B 型巨星。',
+  'Saiph (κ Ori)':     '獵戶東腳，比 Rigel 暗但同為高溫 B 型超巨星。',
+  'Alnitak (ζ Ori)':   '獵戶腰帶左端，最熱的 O 型超巨星之一。',
+  'Alnilam (ε Ori)':   '獵戶腰帶正中，B 型超巨星，亮度太陽 27 萬倍。',
+  'Mintaka (δ Ori)':   '獵戶腰帶右端，幾乎位於天球赤道上。',
+  'Dubhe (α UMa)': '北斗一「天樞」，斗口前的橘巨星，指引北極星方向的起點。',
+  'Merak (β UMa)': '北斗二「天璇」，與 Dubhe 連線延伸 5 倍可找到北極星。',
+  'Phecda (γ UMa)':'北斗三「天璣」，斗底白色主序星。',
+  'Megrez (δ UMa)':'北斗四「天權」，斗柄與斗身連接點，七顆中最暗。',
+  'Alioth (ε UMa)':'北斗五「玉衡」，斗柄第一顆，七顆中最亮。',
+  'Mizar (ζ UMa)': '北斗六「開陽」，歷史上著名的雙星，旁邊有輔星 Alcor。',
+  'Alkaid (η UMa)':'北斗七「搖光」，斗柄末端的藍白星。',
+  'Antares (α Sco)': '天蠍心臟的紅超巨星，亮度太陽 9,000 倍，未來會超新星爆炸。',
+  'Acrab (β Sco)':   '天蠍前鉗，多重星系統。',
+  'Dschubba (δ Sco)':'天蠍前額，B 型藍白星，2000 年曾爆變亮一倍。',
+  'π Sco':           '天蠍前鉗下方的食變雙星。',
+  'σ Sco':           '靠近 Antares 的 B 型巨星。',
+  'τ Sco':           'Antares 南方的 B 型藍白星。',
+  'Sargas (θ Sco)':  '天蠍尾端的橘黃巨星，F 型，亮度太陽約 1,000 倍。',
+  'Shaula (λ Sco)':  '天蠍尾刺，第二亮，「Shaula」意為「螫」。',
+  'Rigil Kent. (α Cen)':'南門二：離太陽最近的恆星系統 (4.4 ly)，含 Proxima Centauri。',
+  'Hadar (β Cen)':      '半人馬第二亮，B 型藍白巨星，與南門二並稱「南方雙星」。',
+  'Muhlifain (γ Cen)':  '半人馬腰部的雙星系統。',
+  'Menkent (θ Cen)':    '半人馬肩部的 K 型橘巨星，距離較近。',
+  'ε Cen':              '半人馬胸口的 B 型藍白星。',
+  'Caph (β Cas)':   '仙后 W 形最右端的 F 型黃白星，距離較近。',
+  'Schedar (α Cas)':'仙后最亮的 K 型橘巨星。',
+  'Navi (γ Cas)':   '仙后正中央的 B 型噴發星，光度會變化。',
+  'Ruchbah (δ Cas)':'仙后 W 形中段的 A 型白色食雙星。',
+  'Segin (ε Cas)':  '仙后 W 形最左端，B 型藍白星。',
+  'Regulus (α Leo)':   '獅子心臟「軒轅十四」，B 型藍白主序星，幾乎位於黃道。',
+  'Denebola (β Leo)':  '獅子尾巴「五帝座一」，A 型白色主序星。',
+  'Algieba (γ Leo)':   '獅子鬃毛「軒轅十二」，金橙色雙星系統。',
+  'Zosma (δ Leo)':     '獅子背部「西上相」，A 型白色主序星。',
+  'Chertan (θ Leo)':   '獅子腰部「西次相」，A 型白色星。',
+  'Ras Elased (ε Leo)':'獅子頭頂「軒轅九」的黃色巨星，名意「獅子頭」。',
+  // 春季 ============================================================
+  'Arcturus (α Boo)':  '大角：全天第 4 亮恆星，僅 37 ly 是太陽鄰居中的橘紅巨星，「春季大三角」之一。',
+  'Nekkar (β Boo)':    '牧夫座頭部的黃巨星，「七公七」。',
+  'Seginus (γ Boo)':   '牧夫座肩部的 A 型白色星，「梗河三」。',
+  'Izar (ε Boo)':      '牧夫腰帶的雙星系統，名意「腰帶」，「梗河一」。',
+  'Rho Boo (ρ Boo)':   '牧夫座背部的橘巨星，「玄戈」。',
+  'Muphrid (η Boo)':   '大角的近鄰，G 型黃色亞巨星，「右攝提一」。',
+  'Spica (α Vir)':     '角宿一：室女座最亮的藍白主序星，黃道帶上 1 等星，「春季大三角」之一。',
+  'Porrima (γ Vir)':   '室女座「東上相」的雙星系統，僅 38 ly 距離很近。',
+  'Vindemiatrix (ε Vir)':'「採葡萄者」之意，黃色巨星，「東次將」。',
+  'Heze (ζ Vir)':      '室女座中央的白色星，「亢宿一」。',
+  'Zavijava (β Vir)':  '室女座頭部附近的 F 型黃白星，「右執法」。',
+  // 夏季 (Summer Triangle) ============================================
+  'Vega (α Lyr)':      '織女星：全天第 5 亮，僅 25 ly。曾為 12000 年前的北極星，「夏季大三角」頂點之一。',
+  'Sheliak (β Lyr)':   '「漸台一」：罕見的食變雙星，亮度週期性變化。',
+  'Sulafat (γ Lyr)':   '「漸台二」：天琴四邊形東南角的 B 型藍白星。',
+  'Delta Lyr (δ Lyr)': '「漸台三」：紅色 M 型巨星，天琴四邊形東北角。',
+  'Zeta Lyr (ζ Lyr)':  '「漸台四」：天琴四邊形西北角，Vega 附近的雙星。',
+  'Altair (α Aql)':    '牛郎星：全天第 12 亮，僅 17 ly。每秒自轉一次！「夏季大三角」之一。',
+  'Tarazed (γ Aql)':   '牛郎旁的橘色巨星，傳說中「擔星」，「河鼓三」。',
+  'Alshain (β Aql)':   '牛郎另一旁的 G 型星，「河鼓一」。',
+  'Zeta Aql (ζ Aql)':  '天鷹西翼端的 A 型白色星，「天弁九」。',
+  'Theta Aql (θ Aql)': '天鷹東翼端的 B 型藍白星。',
+  'Delta Aql (δ Aql)': '天鷹身體的 F 型星，「天弁五」。',
+  'Lambda Aql (λ Aql)':'天鷹尾部的 B 型藍白星，「天弁三」。',
+  'Deneb (α Cyg)':     '天津四：全天前 20 亮恆星，距離高達 2615 ly！真實亮度約太陽 19 萬倍，「夏季大三角」之一。',
+  'Sadr (γ Cyg)':      '天津一：天鵝胸部的 F 型超巨星，南十字交叉點。',
+  'Albireo (β Cyg)':   '輦道增七：著名的金藍對比雙星，望遠鏡中極美。',
+  'Gienah (ε Cyg)':    '天鵝翼端的 K 型橘巨星，「天津九」。',
+  'Delta Cyg (δ Cyg)': '天鵝另一翼端，「天津二」。',
+  // 秋季 ============================================================
+  'Markab (α Peg)':    '飛馬「室宿一」：大四邊形西南角，B 型藍白亞巨星。',
+  'Scheat (β Peg)':    '飛馬「室宿二」：大四邊形西北角的紅巨星 (M 型)。',
+  'Algenib (γ Peg)':   '飛馬「壁宿一」：大四邊形東南角的 B 型藍白星。',
+  'Alpheratz (α And)': '仙女座「壁宿二」：大四邊形東北角 (技術上屬仙女座但構成飛馬四邊形)。',
+  'Enif (ε Peg)':      '飛馬鼻端的 K 型橘超巨星，「危宿三」。',
+  // 冬季 ============================================================
+  'Aldebaran (α Tau)': '畢宿五：金牛眼睛，全天第 14 亮的橘紅巨星，僅 65 ly。「冬季六邊形」之一。',
+  'Elnath (β Tau)':    '五車五：金牛北角尖，B 型藍白巨星，地理上接近御夫座。',
+  'Hyadum I (γ Tau)':  '畢宿七：畢星團 V 字頂端的橘巨星。',
+  'Theta Tau (θ¹ Tau)':'畢宿四：畢星團 V 字另一臂的 A 型白色星。',
+  'Zeta Tau (ζ Tau)':  '天關：金牛南角尖，B 型藍白巨星，附近有蟹狀星雲 M1。',
+  'Alcyone (η Tau, 昴宿)':'昴宿六：昴星團 (Pleiades) 七姊妹中最亮，B 型藍白星。',
+  'Castor (α Gem)':    '北河二：雙子座兄長 (Castor)，A 型多重星系統 (其實是 6 顆星)。',
+  'Pollux (β Gem)':    '北河三：雙子座弟弟 (Pollux)，K 型橘巨星，是 β 卻比 α 亮，僅 34 ly。',
+  'Alhena (γ Gem)':    '井宿三：雙子座腳部，A 型白色星。',
+  'Wasat (δ Gem)':     '天樽二：雙子座中央的 F 型星，幾乎位於黃道。',
+  'Mebsuta (ε Gem)':   '井宿五：Castor 那一邊的 G 型超巨星。',
+  'Tejat (μ Gem)':     '井宿一：Castor 腳尖的 M 型紅巨星。',
+  'Sirius (α CMa)':    '天狼星：全天最亮恆星 (-1.46)，僅 8.6 ly。實際亮度太陽 25 倍，「冬季大三角」與「六邊形」之一。',
+  'Adhara (ε CMa)':    '弧矢七：B 型藍白巨星，全天第二亮的 B 型星之一。',
+  'Wezen (δ CMa)':     '弧矢一：F 型黃超巨星，雖距離 1800 ly 仍是亮星。',
+  'Mirzam (β CMa)':    '軍市一：天狼前方的 B 型藍白星，β Canis Majoris 變星原型。',
+  'Aludra (η CMa)':    '弧矢二：B 型超巨星，距離達 2000 ly。',
+  // 新增的支援星 ===========================================
+  'Meissa (λ Ori)':    '觜宿一：獵戶之頭，O 型熱巨星 (1100 ly)。',
+  'Hatysa (ι Ori)':    '伐三：獵戶劍尖的 O 型超巨星，獵戶星雲 M42 旁邊。',
+  'Wei (ε Sco)':       '尾宿三：天蠍尾巴上段的橘巨星，距離僅 65 ly。',
+  'Denebakrab (μ¹)':   '尾宿二：天蠍尾部的 B 型藍白星。',
+  'Iota Cen (ι Cen)':  '半人馬「庫樓二」：A 型白色星，僅 59 ly 是近鄰。',
+  'Eta Cen (η Cen)':   '半人馬「庫樓四」：B 型藍白星。',
+  'Adhafera (ζ Leo)':  '軒轅十一：獅子鐮刀頂端的 F 型黃白星。',
+  'Subra (η Leo)':     '軒轅七：獅子鬃毛附近的 A 型白色星，距離 1270 ly。',
+  'Delta Boo (δ Boo)': '七公六：牧夫座風箏右上角的 G 型黃色星。',
+  'Delta Vir (δ Vir)': '東上將：室女座 M 型紅巨星，僅 198 ly。',
+  'Zaniah (η Vir)':    '室女座肩部的 A 型白色星。',
+  'Zeta Cyg (ζ Cyg)':  '天津七：天鵝座東翼端的 G 型黃巨星。',
+  'Eta Cyg (η Cyg)':   '天津三：天鵝座身體上的 K 型橘巨星。',
+  'Kappa Gem (κ Gem)': '雙子座 Pollux 旁的 G 型黃巨星。',
+  'Alzirr (ξ Gem)':    '井宿四：雙子座 Castor 那邊腳上的 F 型黃白星。',
+  'Phurud (ζ CMa)':    '弧矢五：大犬座後腳的 B 型藍白星。',
+  'Omicron² CMa (ο²)': '軍市五：大犬座肩上的 B 型超巨星，距離 2880 ly。',
+  // 飛馬座擴充
+  'Matar (η Peg)':     '離宮四：飛馬座前蹄附近的 G 型黃巨星。',
+  'Homam (ζ Peg)':     '雷電二：飛馬座頸部下方的 B 型藍白星。',
+  'Baham (θ Peg)':     '霹靂一：飛馬座頭部附近的 A 型白色星。',
+  // 金牛座擴充
+  'Ain (ε Tau)':       '畢宿六：「Ain」意為「眼睛」，畢星團的 K 型橘巨星。',
+  'Hyadum II (δ¹ Tau)':'畢宿一：畢星團 V 字北側的 K 型橘巨星。',
+  'Atlas (27 Tau)':    '昴宿三：昴星團 (Pleiades) 七姊妹之父，B 型藍白星。',
+  'Electra (17 Tau)':  '昴宿一：昴星團七姊妹之一，B 型藍白星。',
+  'Maia (20 Tau)':     '昴宿四：昴星團七姊妹之一，B 型藍白星。',
+  // 冬季大橢圓專屬
+  'Procyon (α CMi)':   '南河三：小犬座主星，全天第 8 亮，僅 11.5 ly，組成「冬季大三角」與「大六邊形」。',
+  'Capella (α Aur)':   '五車二：御夫座主星，全天第 6 亮，42 ly。實為四星系統，「冬季大六邊形」最北頂點。'
+};
+
+const SCALE_PRESETS = [10, 20, 50, 100, 200, 500, 1000];  // ly per grid
+
+// ===== State =====
+const VBW = 1100, VBH = 700;
+const GRID_PX = 100;           // 每格 100 px (pixel-aligned)
+const PX_PER_DEG = 30;         // 角度→像素 (固定)
+const RIGHT_MARGIN = 80;       // 側面時地球距右邊 px
+
+const state = {
+  key: 'crux',
+  angle: 0,        // 0=從地球看, 90=側面
+  tilt: 0,         // 俯視高度 (0-25 對應 0-30 度)，預設 0 = 純水平旋轉
+  lyPerGrid: 100,  // 1 格的光年值
+  showGrid: false,
+  showSight: false,
+  hideEarth: false,// 隱藏地球但側面強制現身
+  spinning: false,
+  spinDir: 1,
+  hover: null,     // 被 hover 的星 index
+};
+
+// ===== Helpers =====
+const NS = 'http://www.w3.org/2000/svg';
+const $ = id => document.getElementById(id);
+function el(tag, attrs={}, parent=null) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function absMag(m, d) { return m - 5 * Math.log10(d / 32.62); }
+function lumFromAbs(M) { return Math.pow(10, (4.83 - M) / 2.5); }
+function fmtLum(L) {
+  if (L < 0.1) return L.toFixed(2)+'×';
+  if (L < 10)  return L.toFixed(1)+'×';
+  if (L < 1e6) return Math.round(L).toLocaleString()+'×';
+  return L.toExponential(1).replace('+','')+'×';
+}
+function magToSize(m, baseR) {
+  // 視/絕星等 → 光暈半徑因子 (越亮越大)
+  const f = 1 + Math.max(-1.5, 4 - m) * 0.65;
+  return baseR * Math.max(0.35, Math.min(8, f));
+}
+function tiltDeg() { return state.tilt * 1.2; }  // 0-25 → 0-30 度
+// (已移除 y-squish — 用戶反映會造成「星星垂直聚攏」的錯覺)
+function ySquish(angle) { return 1; }
+
+// ===== Processed constellation (cached) =====
+let CUR = null;  // 處理後資料
+
+function processConstellation(key) {
+  const d = RAW[key];
+  const cdr = Math.cos(d.centerDec * Math.PI / 180);
+  const pxPerLy = GRID_PX / state.lyPerGrid;
+  const stars = d.stars.map((s, i) => {
+    const dist = s[4];
+    const mApp = s[5];
+    const mAbs = absMag(mApp, dist);
+    // RA wrap 處理 (例如飛馬座跨越 0°/360°)
+    let dRA = s[2] - d.centerRA;
+    if (dRA >  180) dRA -= 360;
+    if (dRA < -180) dRA += 360;
+    return {
+      i, zh: s[0], en: s[1], ra: s[2], dec: s[3], d: dist,
+      mag: mApp, magAbs: mAbs, type: s[6],
+      x_px: -dRA * cdr * d.scale * PX_PER_DEG,
+      y_px:  (s[3] - d.centerDec) * d.scale * PX_PER_DEG,
+    };
+  });
+  const maxD = Math.max(...stars.map(s => s.d));
+  const minD = Math.min(...stars.map(s => s.d));
+  const midD = (maxD + minD) / 2;
+  // 將 z = (d - midD) * pxPerLy (距離 midD 越遠 z 越正 = 越深)
+  stars.forEach(s => {
+    s.z_px = -(s.d - midD) * pxPerLy;  // 近的星 z 大；遠的星 z 小 (對地球而言)
+  });
+  // 地球在 z_px = +midD * pxPerLy * ? 不對。改成另一種：
+  // 物理：地球在 d=0，星在 d=dist。希望畫面上「往遠處看」是 -z 方向 (進入螢幕)。
+  // 設 earth_z = midD*pxPerLy。star_z = (midD - dist)*pxPerLy. 這樣 earth 是最大 z, 最遠星是最小 z。
+  // 重新算：
+  stars.forEach(s => { s.z_px = (midD - s.d) * pxPerLy; });
+  const earth_z = midD * pxPerLy;
+  // 地球世界 X = 0 (在視角後方；用角度淡入控制顯示)
+  const earthX = 0;
+  return { key, stars, lines: d.lines, maxD, minD, midD, pxPerLy, earth_z, earthX };
+}
+
+// ===== Projection =====
+// (x, y, z) in px → (sx, sy) in viewBox px
+// 攝影機: 在 -X 方向以 angle 繞 Y 軸轉，再以 tilt 俯視
+function project(p, angle, tilt) {
+  const a = angle * Math.PI / 180;
+  const t = tilt * Math.PI / 180;
+  const ca = Math.cos(a), sa = Math.sin(a);
+  const ct = Math.cos(t), st = Math.sin(t);
+  // 攝影機 right vector = (cos, 0, sin)
+  // screen_x = p · right = p.x*cos + p.z*sin
+  // depth-向量 (camera forward) = (sin, 0, -cos)
+  // 攝影機 up after tilt 在 world 中: 把 (0,1,0) 沿 right 軸轉 t = (?, cos(t), ?)
+  // 用「先繞 Y 反向 angle，再繞 X 反向 tilt」公式：
+  const xr =  p.x * ca + p.z * sa;
+  const zr = -p.x * sa + p.z * ca;
+  const yt =  p.y * ct - zr * st;
+  // 螢幕：x 同方向；y 反向 (SVG y 向下)
+  return { x: xr, y: -yt };
+}
+
+// ===== Rendering =====
+const layers = {};
+const elem = {};
+function initLayers() {
+  layers.gridSky = $('grid-sky');
+  layers.gridDepth = $('grid-depth');
+  layers.depthAxis = $('depth-axis');
+  layers.sightLines = $('sight-lines');
+  layers.constLines = $('const-lines');
+  layers.leaderLines = $('leader-lines');
+  layers.stars = $('stars');
+  layers.earth = $('earth-group');
+  layers.labels = $('labels');
+  layers.defs = $('defs');
+}
+
+// 為每個光譜型建立 radial gradient (避免重複定義)
+function ensureDefs() {
+  layers.defs.innerHTML = '';
+  Object.keys(SPEC_HEX).forEach(type => {
+    const grad = el('radialGradient', { id:'glow-'+type, cx:'50%', cy:'50%', r:'50%' }, layers.defs);
+    // 多階層的徑向漸層讓光譜色更明顯
+    el('stop', { offset:'0%',   'stop-color': SPEC_CORE[type], 'stop-opacity':'1' }, grad);
+    el('stop', { offset:'10%',  'stop-color': SPEC_HEX[type],  'stop-opacity':'0.95' }, grad);
+    el('stop', { offset:'28%',  'stop-color': SPEC_HEX[type],  'stop-opacity':'0.6' }, grad);
+    el('stop', { offset:'55%',  'stop-color': SPEC_HEX[type],  'stop-opacity':'0.18' }, grad);
+    el('stop', { offset:'100%', 'stop-color': SPEC_HEX[type],  'stop-opacity':'0' }, grad);
+  });
+  // Earth gradient
+  const eg = el('radialGradient', { id:'earth-grad', cx:'50%', cy:'50%', r:'50%' }, layers.defs);
+  el('stop', { offset:'0%', 'stop-color':'#a4d8ff', 'stop-opacity':'1' }, eg);
+  el('stop', { offset:'100%', 'stop-color':'#3a7fbf', 'stop-opacity':'1' }, eg);
+}
+
+function buildScene() {
+  CUR = processConstellation(state.key);
+  ensureDefs();
+  layers.stars.innerHTML = '';
+  layers.constLines.innerHTML = '';
+  layers.sightLines.innerHTML = '';
+  layers.labels.innerHTML = '';
+  layers.earth.innerHTML = '';
+  layers.depthAxis.innerHTML = '';
+  layers.leaderLines.innerHTML = '';
+
+  // 連線 (星座的星-星)
+  CUR.stars._lineEls = [];
+  CUR.lines.forEach(([a, b]) => {
+    const line = el('line', { class:'const-line', x1:0, y1:0, x2:0, y2:0 }, layers.constLines);
+    CUR.stars._lineEls.push({ a, b, line });
+  });
+
+  // 視線 (地球→星)
+  CUR.stars._sightEls = CUR.stars.map(() => {
+    return el('line', { class:'sight-line', x1:0, y1:0, x2:0, y2:0 }, layers.sightLines);
+  });
+
+  // 星 (外層 translate 定位 + 內層三圓: hover光環/主光暈/內芯)
+  CUR.stars.forEach((star, i) => {
+    const g = el('g', { class:'star-glow', 'data-i':i, transform:'translate(0,0)' }, layers.stars);
+    // hover 才出現的外光環 (放最底層；用相同色但更大半徑)
+    const hoverGlow = el('circle', { class:'glow-extra', fill:'url(#glow-'+star.type+')', cx:0, cy:0, r:24 }, g);
+    const glow = el('circle', { fill:'url(#glow-'+star.type+')', cx:0, cy:0, r:10 }, g);
+    const core = el('circle', { fill: SPEC_CORE[star.type] || '#ffffff', cx:0, cy:0, r:2 }, g);
+    star._g = g; star._glow = glow; star._core = core; star._hoverGlow = hoverGlow;
+    // 互動 — hover 高亮對應卡片
+    g.addEventListener('pointerenter', () => setHover(i));
+    g.addEventListener('pointerleave', () => setHover(null));
+  });
+
+  // 地球
+  CUR.earthCircle = el('circle', { class:'earth', cx:0, cy:0, r:8, fill:'url(#earth-grad)' }, layers.earth);
+  CUR.earthRing = el('circle', { class:'earth-ring', cx:0, cy:0, r:14 }, layers.earth);
+  CUR.earthLabel = el('text', { class:'earth-label', x:0, y:0, 'text-anchor':'middle' }, layers.labels);
+  CUR.earthLabel.textContent = '地球';
+
+  // 星標籤
+  CUR.stars.forEach((star, i) => {
+    const grp = el('g', { class:'star-label' }, layers.labels);
+    const tZh   = el('text', { class:'zh', x:0, y:0,  'text-anchor':'middle' }, grp);
+    const tEn   = el('text', { class:'en', x:0, y:12, 'text-anchor':'middle' }, grp);
+    const tMeta = el('text', { class:'meta', x:0, y:24, 'text-anchor':'middle' }, grp);
+    tZh.textContent = star.zh;
+    tEn.textContent = star.en;
+    star._labelGrp = grp; star._tZh = tZh; star._tEn = tEn; star._tMeta = tMeta;
+  });
+
+  rebuildDetailsPanel();
+  update();
+}
+
+// ===== 算地球螢幕位置 + 取得攝影機中心偏移 (cx, cy) =====
+// 想要：sky view 時內容置中；side view 時地球鎖在右側
+function computeCenter() {
+  const a = state.angle;
+  const t = tiltDeg();
+  const sq = ySquish(a);
+
+  // 算所有點的 camera-space 範圍
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  const allPts = CUR.stars.map(s => ({ x: s.x_px, y: s.y_px * sq, z: s.z_px }));
+  allPts.push({ x: CUR.earthX, y: 0, z: CUR.earth_z });
+  for (const p of allPts) {
+    const pp = project(p, a, t);
+    if (pp.x < minX) minX = pp.x;
+    if (pp.x > maxX) maxX = pp.x;
+    if (pp.y < minY) minY = pp.y;
+    if (pp.y > maxY) maxY = pp.y;
+  }
+  // 中心置中: cx 將 (minX+maxX)/2 對齊到 VBW/2
+  let cx = VBW/2 - (minX + maxX) / 2;
+  const cy = VBH/2 - (minY + maxY) / 2;
+
+  // 側面視角時把地球往右鎖 (45-65° 完成)
+  const lockT = Math.max(0, Math.min(1, (a - 45) / 20));
+  if (lockT > 0) {
+    const earthProj = project({ x: CUR.earthX, y: 0, z: CUR.earth_z }, a, t);
+    const targetEarthSx = VBW - RIGHT_MARGIN;
+    const lockedCx = targetEarthSx - earthProj.x;
+    cx = cx * (1 - lockT) + lockedCx * lockT;
+  }
+  return { cx, cy, sq };
+}
+
+function project2screen(p, ctx) {
+  const pp = project(p, state.angle, tiltDeg());
+  return { x: ctx.cx + pp.x, y: ctx.cy + pp.y };
+}
+
+function update() {
+  if (!CUR) return;
+  const ctx = computeCenter();
+  const a = state.angle;
+  const sq = ctx.sq;
+
+  // 更新星位置 + 大小 (視/絕星等漸變)
+  const t = a / 90;
+  const baseR = 14;
+  CUR.stars.forEach(star => {
+    const p = project2screen({ x: star.x_px, y: star.y_px * sq, z: star.z_px }, ctx);
+    star._sx = p.x; star._sy = p.y;
+    const fApp = magToSize(star.mag, baseR);
+    const fAbs = magToSize(star.magAbs, baseR);
+    const r = fApp * (1 - t) + fAbs * t;
+    // 用 transform 定位，避免 hover 縮放時跳位
+    star._g.setAttribute('transform', 'translate(' + p.x.toFixed(1) + ',' + p.y.toFixed(1) + ')');
+    star._glow.setAttribute('r', r);
+    star._core.setAttribute('r', Math.max(1.2, r * 0.13));
+    star._hoverGlow.setAttribute('r', r * 1.8 + 10);
+  });
+
+  // 連線
+  CUR.stars._lineEls.forEach(({a:ia, b:ib, line}) => {
+    const sa = CUR.stars[ia], sb = CUR.stars[ib];
+    line.setAttribute('x1', sa._sx); line.setAttribute('y1', sa._sy);
+    line.setAttribute('x2', sb._sx); line.setAttribute('y2', sb._sy);
+  });
+
+  // 地球 — 「視角後方」效果：從畫面外右側滑入 + 淡入
+  // 真正的 3D 投影位置 (鎖右後的目標位置)
+  const eP_raw = project2screen({ x: CUR.earthX, y: 0, z: CUR.earth_z }, ctx);
+  // 滑入插值：angle 50-75 之間從畫面外 (VBW+60) 滑到 eP_raw.x
+  const slideT = Math.max(0, Math.min(1, (a - 50) / 25));
+  const offScreenX = VBW + 60;
+  const eP = {
+    x: offScreenX + (eP_raw.x - offScreenX) * slideT,
+    y: eP_raw.y
+  };
+  const earthScale = 1 - (a / 90) * 0.4;
+  let eOp;
+  if (state.hideEarth) {
+    // 強制隱藏模式 — 只在快接近側面才現身
+    eOp = Math.max(0, Math.min(1, (a - 70) / 15));
+  } else {
+    // 預設「視角後方」：angle 0-50 完全隱形，50-80 隨滑入淡入
+    eOp = Math.max(0, Math.min(1, (a - 50) / 30));
+  }
+  CUR.earthCircle.setAttribute('cx', eP.x);
+  CUR.earthCircle.setAttribute('cy', eP.y);
+  CUR.earthCircle.setAttribute('r', 8 * earthScale);
+  CUR.earthCircle.setAttribute('opacity', eOp);
+  CUR.earthRing.setAttribute('cx', eP.x);
+  CUR.earthRing.setAttribute('cy', eP.y);
+  CUR.earthRing.setAttribute('r', 14 * earthScale);
+  CUR.earthRing.setAttribute('opacity', 0.5 * Math.min(1, Math.max(0, (a - 30) / 30)));
+  CUR.earthLabel.setAttribute('x', eP.x);
+  CUR.earthLabel.setAttribute('y', eP.y - 18 * earthScale);
+  CUR.earthLabel.setAttribute('opacity', eOp);
+
+  // 視線 (地球→各星)
+  CUR.stars._sightEls.forEach((line, i) => {
+    const s = CUR.stars[i];
+    line.setAttribute('x1', eP.x); line.setAttribute('y1', eP.y);
+    line.setAttribute('x2', s._sx); line.setAttribute('y2', s._sy);
+    const op = state.showSight ? 0.35 * Math.min(1, Math.max(0, (a - 20) / 30)) : 0;
+    line.setAttribute('opacity', op);
+  });
+
+  updateGrid(ctx, eP);
+  updateLabelsAndLeaders(ctx, eP);
+  updateDepthAxis(ctx, eP);
+  updateScales();
+  updateMode();
+}
+
+// ===== 格線：3D 雙平面，但 SVG 中以 pixel-aligned 方式繪製 =====
+// 天空格線 (黃) = 在 (x_world, y_world, earth_z) 平面上的格子線
+// 深度格線 (藍) = 在 (0, y_world, z_world) 平面上的格子線
+// 兩組都「穿過地球位置」→ 完美對齊地球
+function updateGrid(ctx, eP) {
+  layers.gridSky.innerHTML = '';
+  layers.gridDepth.innerHTML = '';
+  if (!state.showGrid) return;
+
+  const a = state.angle;
+  const rad = a * Math.PI / 180;
+  const skyOpacity = Math.max(0, Math.cos(rad)) * 0.9;
+  const depthOpacity = Math.max(0, Math.sin(rad)) * 0.9;
+  // 天空平面格線
+  drawPlaneGrid(layers.gridSky, 'sky', ctx, 'sky', skyOpacity, eP);
+  // 深度平面格線
+  drawPlaneGrid(layers.gridDepth, 'depth', ctx, 'depth', depthOpacity, eP);
+}
+
+function drawPlaneGrid(parent, plane, ctx, cssClass, opacity, eP) {
+  if (opacity <= 0.005) return;
+  parent.setAttribute('opacity', opacity);
+  const range = Math.max(VBW, VBH) * 1.4;
+  // 三階格線：minor 25 px / mid 50 px / major 100 px (4 細格 = 1 主格)
+  const subStep = GRID_PX / 4;  // 25 px
+  const half = range / 2;
+  const nSub = Math.ceil(half / subStep);
+  const lines = [];
+  function level(n) {
+    if (n % 4 === 0) return 'major';
+    if (n % 2 === 0) return 'mid';
+    return 'minor';
+  }
+
+  if (plane === 'sky') {
+    for (let n = -nSub; n <= nSub; n++) {
+      const u = n * subStep;
+      const lv = level(n);
+      const p1 = project2screen({ x: u, y: -half, z: CUR.earth_z }, ctx);
+      const p2 = project2screen({ x: u, y:  half, z: CUR.earth_z }, ctx);
+      lines.push({ p1, p2, lv });
+      const p3 = project2screen({ x: -half, y: u, z: CUR.earth_z }, ctx);
+      const p4 = project2screen({ x:  half, y: u, z: CUR.earth_z }, ctx);
+      lines.push({ p1: p3, p2: p4, lv });
+    }
+  } else { // depth (Y-Z 平面，x=0)
+    for (let n = -nSub; n <= nSub; n++) {
+      const v = n * subStep;
+      const lv = level(n);
+      const p1 = project2screen({ x: 0, y: -half, z: CUR.earth_z + v }, ctx);
+      const p2 = project2screen({ x: 0, y:  half, z: CUR.earth_z + v }, ctx);
+      lines.push({ p1, p2, lv });
+      const p3 = project2screen({ x: 0, y: v, z: CUR.earth_z - half }, ctx);
+      const p4 = project2screen({ x: 0, y: v, z: CUR.earth_z + half }, ctx);
+      lines.push({ p1: p3, p2: p4, lv });
+    }
+  }
+  lines.forEach(({p1, p2, lv}) => {
+    el('line', {
+      class: 'grid-line ' + cssClass + ' ' + lv,
+      x1: p1.x.toFixed(1), y1: p1.y.toFixed(1),
+      x2: p2.x.toFixed(1), y2: p2.y.toFixed(1)
+    }, parent);
+  });
+}
+
+// ===== 標籤 (含防撞 + 引線) =====
+function updateLabelsAndLeaders(ctx, eP) {
+  layers.leaderLines.innerHTML = '';
+  const a = state.angle;
+  const opacity = Math.min(1, a / 12);
+
+  // 標籤文字
+  CUR.stars.forEach((s, i) => {
+    let metaText;
+    if (a < 25) metaText = '視 ' + s.mag.toFixed(1);
+    else if (a > 65) metaText = '絕 ' + s.magAbs.toFixed(1);
+    else metaText = '視 ' + s.mag.toFixed(1) + ' → 絕 ' + s.magAbs.toFixed(1);
+    s._tMeta.textContent = metaText + ' · ' + s.d + ' ly';
+    s._tMeta.setAttribute('class', 'meta' + (a > 50 ? ' abs' : ''));
+  });
+
+  // 求理想位置 (星上方 28 px)
+  const items = CUR.stars.map(s => ({
+    s, x: s._sx, y: s._sy - 28, starX: s._sx, starY: s._sy
+  }));
+  const labelW = 110, labelH = 42;
+  items.sort((a, b) => a.y - b.y);
+  for (let i = 0; i < items.length; i++) {
+    for (let j = i + 1; j < items.length; j++) {
+      const A = items[i], B = items[j];
+      if (Math.abs(B.x - A.x) < labelW && B.y < A.y + labelH) {
+        B.y = A.y + labelH;
+      }
+    }
+  }
+  // 套用位置 + 畫引線
+  items.forEach(it => {
+    const g = it.s._labelGrp;
+    g.setAttribute('transform', 'translate(' + it.x.toFixed(1) + ',' + it.y.toFixed(1) + ')');
+    g.setAttribute('opacity', opacity);
+    // 引線判斷: 如果標籤被推動 > 6px (任一軸)，畫引線
+    const moved = Math.abs(it.y - (it.starY - 28)) > 6 || Math.abs(it.x - it.starX) > 6;
+    if (moved) {
+      el('line', {
+        class: 'leader',
+        x1: it.starX.toFixed(1), y1: it.starY.toFixed(1),
+        x2: it.x.toFixed(1), y2: (it.y + 30).toFixed(1),
+        opacity: (opacity * 0.6).toFixed(2)
+      }, layers.leaderLines);
+    }
+  });
+}
+
+// ===== 深度軸：永遠橫跨整個畫面寬，刻度從地球出發 =====
+function updateDepthAxis(ctx, eP) {
+  layers.depthAxis.innerHTML = '';
+  const a = state.angle;
+  if (a < 18) return;
+  const axisOpacity = Math.min(1, (a - 18) / 25);
+  layers.depthAxis.setAttribute('class', 'axis-depth');
+  layers.depthAxis.setAttribute('opacity', axisOpacity);
+
+  const axisY = VBH - 22;
+  const leftX = 30, rightX = VBW - 30;
+  // 主軸線：整個畫面寬
+  el('line', { x1: leftX, y1: axisY, x2: rightX, y2: axisY, 'stroke-width':2 }, layers.depthAxis);
+
+  // 計算地球的螢幕 x；地球以外的位置代表「光年距離」
+  // 1 ly 在螢幕上對應幾 px (在當前角度下)
+  const a_rad = a * Math.PI / 180;
+  const lyToScreenPx = CUR.pxPerLy * Math.abs(Math.sin(a_rad));  // angle=0 時為 0 (deg 軸主導)
+  // 如果 sin 太小，避免除以接近 0：到 angle=18 以上才會進來，sin(18)=0.309，可接受
+  if (lyToScreenPx < 0.005) return;
+
+  // 地球落在畫面哪邊：用 eP.x 判斷
+  const earthScreenX = eP.x;
+  // 軸方向：若地球在右側則往左是越遠；若在左側則往右是越遠
+  // 為了一致性，假設地球在右邊
+  const dir = earthScreenX > (leftX + rightX) / 2 ? -1 : 1;  // -1 表示越往左越遠
+
+  // 兩端箭頭 (指向越遠方向)
+  const arrowX = dir < 0 ? leftX : rightX;
+  el('polygon', {
+    points: arrowX + ',' + axisY + ' ' + (arrowX - dir*9) + ',' + (axisY-5) + ' ' + (arrowX - dir*9) + ',' + (axisY+5),
+    fill: 'var(--accent-blue)'
+  }, layers.depthAxis);
+
+  // 決定 tick 間距：每格大約佔 80-150 px
+  const visibleSpanPx = rightX - leftX;
+  const visibleLy = visibleSpanPx / lyToScreenPx;
+  const tickStep = pickNice(visibleLy / 9);
+  // 從地球 (0 ly) 開始往「越遠」方向放刻度，直到出畫面
+  // ly 對應的 screen X 位置：earthScreenX + dir * ly * lyToScreenPx
+  for (let ly = 0; ly < visibleLy + tickStep; ly += tickStep) {
+    const x = earthScreenX + dir * ly * lyToScreenPx;
+    if (x < leftX - 1 || x > rightX + 1) continue;
+    el('line', { x1: x, y1: axisY - 5, x2: x, y2: axisY + 5 }, layers.depthAxis);
+    const txt = el('text', { x: x, y: axisY + 17 }, layers.depthAxis);
+    txt.textContent = (ly === 0 ? '地球 0' : ly.toLocaleString() + ' ly');
+  }
+
+  // 也在反方向標註 1-2 個刻度 (代表「地球的另一邊」或「比地球還近的位置」)
+  for (let k = 1; k <= 2; k++) {
+    const ly = k * tickStep;
+    const x = earthScreenX - dir * ly * lyToScreenPx;
+    if (x < leftX - 1 || x > rightX + 1) continue;
+    el('line', { x1: x, y1: axisY - 5, x2: x, y2: axisY + 5, opacity: 0.4 }, layers.depthAxis);
+    const txt = el('text', { x: x, y: axisY + 17, opacity: 0.5 }, layers.depthAxis);
+    txt.textContent = '−' + ly.toLocaleString() + ' ly';
+  }
+
+  // 標題在軸中央上方
+  const midX = (leftX + rightX) / 2;
+  const title = el('text', { x: midX, y: axisY - 14, class:'title' }, layers.depthAxis);
+  title.textContent = dir < 0 ? '← 越左 = 越遠 (恆星實際距離)   你 (地球) →'
+                              : '你 (地球) ←   越右 = 越遠 (恆星實際距離) →';
+}
+
+function pickNice(v) {
+  if (v <= 0) return 1;
+  const e = Math.floor(Math.log10(v));
+  const m = v / Math.pow(10, e);
+  let nm = m <= 1.5 ? 1 : m <= 3 ? 2 : m <= 7 ? 5 : 10;
+  return nm * Math.pow(10, e);
+}
+
+function updateScales() {
+  // 1 格 = 100 px, 對應 lyPerGrid 光年 / GRID_PX/PX_PER_DEG/scale 度
+  $('grid-label').textContent = '100 px = ' + state.lyPerGrid + ' 光年';
+  $('ly-val').textContent = state.lyPerGrid;
+  // 角度方面：每格 = GRID_PX / (PX_PER_DEG * d.scale) 度
+  const sc = RAW[state.key].scale;
+  const degPerGrid = GRID_PX / (PX_PER_DEG * sc);
+  $('deg-val').textContent = degPerGrid.toFixed(1).replace(/\.0$/, '') + '°';
+
+  // Opacity of scale items
+  $('deg-scale').style.opacity = Math.max(0.3, 1 - state.angle / 75);
+  $('ly-scale').style.opacity = Math.max(0.3, Math.min(1, (state.angle - 15) / 60));
+}
+
+function updateMode() {
+  const a = state.angle;
+  const p = $('mode-pill');
+  const t = $('stage-title');
+  const name = RAW[state.key]._cnName || $('constellation').selectedOptions[0].textContent;
+  RAW[state.key]._cnName = name;
+  if (a < 25) {
+    p.className = 'mode-pill sky'; p.textContent = '視星等模式';
+    t.textContent = name + ' · 從地球看';
+  } else if (a > 65) {
+    p.className = 'mode-pill depth'; p.textContent = '絕對星等模式';
+    t.textContent = name + ' · 側面拆開看真實距離';
+  } else {
+    p.className = 'mode-pill'; p.textContent = '視 → 絕 過渡 ' + Math.round(a) + '°';
+    t.textContent = name + ' · 旋轉中';
+  }
+  $('angle-val').textContent = Math.round(a) + '°';
+}
+
+// ===== 詳細資料面板 =====
+function rebuildDetailsPanel() {
+  const grid = $('star-grid');
+  const meta = $('details-meta');
+  const stars = CUR.stars.slice().sort((a, b) => a.d - b.d);
+  const name = $('constellation').selectedOptions[0].textContent;
+  meta.textContent = name + ' · ' + stars.length + ' 顆主星';
+  let html = '';
+  stars.forEach(s => {
+    const info = SPEC_INFO[s.type] || { name:'?', temp:'?' };
+    const color = SPEC_HEX[s.type] || '#fff';
+    const lum = lumFromAbs(s.magAbs);
+    const desc = STAR_DESC[s.en] || (info.name + '。比太陽亮 ' + fmtLum(lum) + '。');
+    html += '<div class="star-card spec-' + s.type + '" data-i="' + s.i + '">' +
+      '<div class="zh">' + s.zh + '</div>' +
+      '<div class="en">' + s.en + '</div>' +
+      '<div class="kv"><span class="k">距離</span><span class="v">' + s.d.toLocaleString() + ' ly</span></div>' +
+      '<div class="kv"><span class="k">視星等</span><span class="v app">' + s.mag.toFixed(2) + '</span></div>' +
+      '<div class="kv"><span class="k">絕對星等</span><span class="v abs">' + s.magAbs.toFixed(2) + '</span></div>' +
+      '<div class="kv"><span class="k">比太陽亮</span><span class="v lum">' + fmtLum(lum) + '</span></div>' +
+      '<div class="kv"><span class="k">光譜型</span><span class="v chip"><i style="background:' + color + '"></i>' + s.type + ' · ' + info.name + '</span></div>' +
+      '<div class="kv"><span class="k">表面溫度</span><span class="v">' + info.temp + '</span></div>' +
+      '<div class="desc">' + desc + '</div>' +
+      '</div>';
+  });
+  grid.innerHTML = html;
+  // hover 互動：卡片 ↔ 星
+  grid.querySelectorAll('.star-card').forEach(card => {
+    const i = +card.getAttribute('data-i');
+    card.addEventListener('pointerenter', () => setHover(i));
+    card.addEventListener('pointerleave', () => setHover(null));
+  });
+}
+
+function setHover(i) {
+  if (state.hover === i) return;
+  state.hover = i;
+  // 星本身
+  CUR.stars.forEach((s, idx) => {
+    s._g.classList.toggle('hover', idx === i);
+  });
+  // 卡片
+  $('star-grid').querySelectorAll('.star-card').forEach(c => {
+    c.classList.toggle('hover', +c.getAttribute('data-i') === i);
+  });
+}
+
+// ===== Controls =====
+function setAngle(v) {
+  state.angle = Math.max(0, Math.min(90, v));
+  $('angle').value = state.angle;
+  update();
+}
+function setTilt(v) {
+  state.tilt = Math.max(0, Math.min(25, v));
+  $('tilt').value = state.tilt;
+  $('tilt-val').textContent = state.tilt + ' (' + Math.round(tiltDeg()) + '°)';
+  update();
+}
+function setLyPerGrid(idx) {
+  state.lyPerGrid = SCALE_PRESETS[idx];
+  $('dist-scale').value = idx;
+  $('dist-scale-val').textContent = state.lyPerGrid + ' ly/格';
+  buildScene();  // 重建：z 座標都會改
+  saveState();
+}
+function tween(target, dur=900) {
+  state.spinning = false; $('t-spin').classList.remove('active');
+  const start = state.angle, t0 = performance.now();
+  function step(t) {
+    const p = Math.min((t - t0) / dur, 1);
+    const e = p < 0.5 ? 2*p*p : 1 - Math.pow(-2*p+2, 2)/2;
+    setAngle(start + (target - start) * e);
+    if (p < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+function bindControls() {
+  $('constellation').addEventListener('change', e => {
+    state.key = e.target.value;
+    buildScene(); saveState();
+  });
+  document.querySelectorAll('[data-view]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('[data-view]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      tween(+btn.getAttribute('data-view'));
+    });
+  });
+  $('angle').addEventListener('input', e => {
+    state.spinning = false; $('t-spin').classList.remove('active');
+    setAngle(+e.target.value);
+    document.querySelectorAll('[data-view]').forEach(b => b.classList.remove('active'));
+  });
+  $('tilt').addEventListener('input', e => { setTilt(+e.target.value); saveState(); });
+  $('dist-scale').addEventListener('input', e => { setLyPerGrid(+e.target.value); });
+
+  $('t-grid').addEventListener('click', () => {
+    state.showGrid = !state.showGrid;
+    $('t-grid').classList.toggle('active', state.showGrid);
+    $('t-grid').textContent = state.showGrid ? '隱藏格線' : '顯示格線';
+    update(); saveState();
+  });
+  $('t-spin').addEventListener('click', () => {
+    state.spinning = !state.spinning;
+    $('t-spin').classList.toggle('active', state.spinning);
+    $('t-spin').textContent = state.spinning ? '停止旋轉' : '自動旋轉';
+  });
+  $('t-sight').addEventListener('click', () => {
+    state.showSight = !state.showSight;
+    $('t-sight').classList.toggle('active', state.showSight);
+    $('t-sight').textContent = state.showSight ? '關閉視線' : '連線到地球';
+    update(); saveState();
+  });
+  $('t-earth').addEventListener('click', () => {
+    state.hideEarth = !state.hideEarth;
+    $('t-earth').classList.toggle('active', state.hideEarth);
+    $('t-earth').textContent = state.hideEarth ? '顯示地球' : '隱藏地球';
+    update(); saveState();
+  });
+  $('details-head').addEventListener('click', () => {
+    $('details').classList.toggle('collapsed');
+  });
+
+  // ===== 拖曳旋轉 (滑鼠/手指) =====
+  const stage = $('stage');
+  let dragging = false, lastX = 0, lastY = 0;
+  stage.addEventListener('pointerdown', e => {
+    if (e.target.closest('.star-glow')) return;  // 拖曳到星上不旋轉
+    dragging = true; lastX = e.clientX; lastY = e.clientY;
+    stage.classList.add('grabbing');
+    stage.setPointerCapture(e.pointerId);
+    state.spinning = false; $('t-spin').classList.remove('active');
+  });
+  stage.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    const dx = e.clientX - lastX;
+    const dy = e.clientY - lastY;
+    lastX = e.clientX; lastY = e.clientY;
+    // 水平拖曳 → 旋轉; 垂直拖曳 → tilt
+    const rect = stage.getBoundingClientRect();
+    const angleDelta = (dx / rect.width) * 120;
+    const tiltDelta = -(dy / rect.height) * 30;
+    setAngle(state.angle + angleDelta);
+    if (Math.abs(tiltDelta) > 0.05) setTilt(state.tilt + tiltDelta);
+    document.querySelectorAll('[data-view]').forEach(b => b.classList.remove('active'));
+  });
+  stage.addEventListener('pointerup', e => {
+    dragging = false; stage.classList.remove('grabbing');
+    saveState();
+  });
+  stage.addEventListener('pointercancel', () => { dragging = false; stage.classList.remove('grabbing'); });
+}
+
+// ===== Animation loop =====
+function animate() {
+  requestAnimationFrame(animate);
+  if (state.spinning) {
+    let next = state.angle + state.spinDir * 0.35;
+    if (next >= 88) { next = 88; state.spinDir = -1; }
+    if (next <= 2)  { next = 2;  state.spinDir = 1; }
+    setAngle(next);
+  }
+}
+
+// ===== State persistence =====
+const LS_KEY = 'parallax-v8-state';
+function saveState() {
+  try {
+    localStorage.setItem(LS_KEY, JSON.stringify({
+      key: state.key, angle: state.angle, tilt: state.tilt,
+      lyPerGrid: state.lyPerGrid, showGrid: state.showGrid, showSight: state.showSight,
+      hideEarth: state.hideEarth
+    }));
+  } catch (e) {}
+}
+function loadState() {
+  try {
+    const s = JSON.parse(localStorage.getItem(LS_KEY));
+    if (!s) return;
+    if (s.key && RAW[s.key]) state.key = s.key;
+    if (typeof s.angle === 'number') state.angle = s.angle;
+    if (typeof s.tilt === 'number') state.tilt = s.tilt;
+    if (typeof s.lyPerGrid === 'number') state.lyPerGrid = s.lyPerGrid;
+    if (typeof s.showGrid === 'boolean') state.showGrid = s.showGrid;
+    if (typeof s.showSight === 'boolean') state.showSight = s.showSight;
+    if (typeof s.hideEarth === 'boolean') state.hideEarth = s.hideEarth;
+  } catch (e) {}
+}
+
+// ===== Init =====
+function init() {
+  initLayers();
+  loadState();
+  // 同步 UI
+  $('constellation').value = state.key;
+  $('angle').value = state.angle;
+  $('tilt').value = state.tilt;
+  $('tilt-val').textContent = state.tilt + ' (' + Math.round(tiltDeg()) + '°)';
+  const idx = SCALE_PRESETS.indexOf(state.lyPerGrid);
+  $('dist-scale').value = idx >= 0 ? idx : 3;
+  $('dist-scale-val').textContent = state.lyPerGrid + ' ly/格';
+  if (state.showGrid) { $('t-grid').classList.add('active'); $('t-grid').textContent = '隱藏格線'; }
+  if (state.showSight){ $('t-sight').classList.add('active'); $('t-sight').textContent = '關閉視線'; }
+  if (state.hideEarth){ $('t-earth').classList.add('active'); $('t-earth').textContent = '顯示地球'; }
+  bindControls();
+  buildScene();
+  animate();
+}
+init();
+})();
+</script>
+</body>
+</html>

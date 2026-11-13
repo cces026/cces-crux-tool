@@ -9,6 +9,7 @@
 | 潮汐模擬器 | /tools/tides/ |
 | 太陽系比例尺換算器 | /tools/solar-scale/ |
 | 天球太陽軌跡 | /tools/sun-path/ |
+| 星座視差視覺化 | /tools/parallax/ |
 
 - 每個工具都是單一 HTML 檔，下載後可離線使用。
 - 工具資料夾名稱（網址）一旦公開就不要改，以免已印出的 QR 碼失效。
